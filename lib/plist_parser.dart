@@ -7,12 +7,85 @@ import 'dart:typed_data';
 import 'package:xml/xml.dart';
 
 class PlistParser {
+  // Return an Map object for the given plist format string.
+  // It detects if file format is binary or xml automatically
+  //
+  // Set "typeDetection = false" when you force to use the xml parser
+  Map parse(String text, {typeDetection = true}) {
+    if (typeDetection && isBinaryTypeText(text)) {
+      // binary
+      return parseBytes(Uint8List.fromList(text.codeUnits));
+    } else {
+      // xml
+      return parseXml(text);
+    }
+  }
 
-  // Return an Map object for the given input string,
-  // or throws an XmlParserException or an ArgumentError if the input is invalid
-  Map parse(String xml) {
+  // Return an Map object for the given plist format "Uint8List".
+  // It detects if file format is binary or xml automatically
+  //
+  // Set "typeDetection = false" when you force to use the xml parser
+  Map parseBytes(Uint8List dataBytes, {typeDetection = true}) {
+    if (typeDetection && isBinaryTypeBytes(dataBytes)) {
+      // binary
+      return parseBinaryBytes(dataBytes);
+    } else {
+      // xml
+      return parseXml(String.fromCharCodes(dataBytes));
+    }
+  }
+
+  // Synchronously return an Map object for the given the path of plist format file.
+  // It detects if file format is binary or xml automatically.
+  //
+  // Set "typeDetection = false" when you force to use the xml parser.
+  Map parseFileSync(String path, {typeDetection = true}) {
+    var file = File(path);
+    if (!file.existsSync()) {
+      throw NotFoundException('Not found plist file');
+    }
+
+    var dataBytes = file.readAsBytesSync();
+    if (typeDetection && isBinaryTypeBytes(dataBytes)) {
+      return parseBinaryBytes(dataBytes);
+    } else {
+      return parseXml(String.fromCharCodes(dataBytes));
+    }
+  }
+
+  // Return an Map object for the given the path of plist format file.
+  // It detects if file format is binary or xml automatically.
+  //
+  // Set "typeDetection = false" when you force to use the xml parser.
+  Future<Map> parseFile(String path, {typeDetection = true}) async {
+    var file = File(path);
+    if (!await file.exists()) {
+      throw NotFoundException('Not found plist file');
+    }
+
+    return file.readAsBytes().then((dataBytes) {
+      if (typeDetection && isBinaryTypeBytes(dataBytes)) {
+        return parseBinaryBytes(dataBytes);
+      } else {
+        return parseXml(String.fromCharCodes(dataBytes));
+      }
+    });
+  }
+
+  // check if text is binary
+  isBinaryTypeText(String text) {
+    return text.substring(0, 6) == "bplist";
+  }
+
+  // check if dataBytes is binary
+  isBinaryTypeBytes(Uint8List dataBytes) {
+    return String.fromCharCodes(dataBytes.getRange(0, 6)) == "bplist";
+  }
+
+  Map parseXml(String xml) {
     var doc = XmlDocument.parse(xml);
-    var elements = doc.rootElement.children.where(_isElement).cast<XmlElement>();
+    var elements =
+        doc.rootElement.children.where(_isElement).cast<XmlElement>();
     if (elements.isEmpty) {
       throw NotFoundException('Not found plist elements');
     }
@@ -20,7 +93,7 @@ class PlistParser {
     return _handleDict(elements.first);
   }
 
-  Map parseFileSync(String path) {
+  Map parseXmlFileSync(String path) {
     var file = File(path);
     if (!file.existsSync()) {
       throw NotFoundException('Not found plist file');
@@ -30,13 +103,19 @@ class PlistParser {
     return parse(data);
   }
 
-  Future<Map> parseFile(String path) async {
+  Future<Map> parseXmlFile(String path) async {
     var file = File(path);
     if (!await file.exists()) {
       throw NotFoundException('Not found plist file');
     }
 
     return file.readAsString().then((value) => parse(value));
+  }
+
+  Map parseBinaryFileSync(String path) {
+    var file = File(path);
+    var bytes = file.readAsBytesSync();
+    return parseBinaryBytes(bytes);
   }
 
   Future<Map> parseBinaryFile(String path) async {
@@ -46,12 +125,6 @@ class PlistParser {
     }
 
     return file.readAsBytes().then((value) => parseBinaryBytes(value));
-  }
-
-  Map parseBinaryFileSync(String path) {
-    var file = File(path);
-    var bytes = file.readAsBytesSync();
-    return parseBinaryBytes(bytes);
   }
 
   Map parseBinaryBytes(Uint8List dataBytes) {
@@ -64,22 +137,21 @@ class PlistParser {
 
     // offset table start ref
     var offsetTableStartPos = _bytesToInt(
-        dataBytes.getRange(dataBytes.length - offsetTableOffsetSize, dataBytes.length),
-        offsetTableOffsetSize
-    );
+        dataBytes.getRange(
+            dataBytes.length - offsetTableOffsetSize, dataBytes.length),
+        offsetTableOffsetSize);
 
     // offsetTableStartPos
     var startPos = _bytesToInt(
-        dataBytes.getRange(offsetTableStartPos, offsetTableStartPos + offsetTableOffsetSize),
-        offsetTableOffsetSize
-    );
+        dataBytes.getRange(
+            offsetTableStartPos, offsetTableStartPos + offsetTableOffsetSize),
+        offsetTableOffsetSize);
 
-    var binaryData = BinaryData(
+    var binaryData = _BinaryData(
         bytes: dataBytes,
         offsetTableOffsetSize: offsetTableOffsetSize,
         offsetTableStartPos: offsetTableStartPos,
-        startPos: startPos
-    );
+        startPos: startPos);
 
     return _handleBinary(binaryData, startPos);
   }
@@ -118,9 +190,8 @@ class PlistParser {
   Map _handleDict(XmlElement elem) {
     var children = elem.children.where(_isElement).cast<XmlElement>();
 
-    var keys = children
-        .where((el) => el.name.local == 'key')
-        .map((el) => el.text);
+    var keys =
+        children.where((el) => el.name.local == 'key').map((el) => el.text);
 
     var values = children
         .where((el) => el.name.local != 'key')
@@ -128,15 +199,15 @@ class PlistParser {
     return Map.fromIterables(keys, values);
   }
 
-  _handleBinary(BinaryData binary, int pos) {
+  _handleBinary(_BinaryData binary, int pos) {
     var byte = binary.bytes[pos];
     switch (byte & 0xF0) {
       // bool
       case 0x00:
         if (byte == 0x08) {
-          return true;
-        } else if (byte == 0x09) {
           return false;
+        } else if (byte == 0x09) {
+          return true;
         } else {
           throw Exception("Unknown bool byte encountered: $byte");
         }
@@ -145,8 +216,7 @@ class PlistParser {
       case 0x10:
         var length = 1 << (byte & 0xf);
         pos++;
-        return _bytesToInt(
-            binary.bytes.getRange(pos, pos + length), length);
+        return _bytesToInt(binary.bytes.getRange(pos, pos + length), length);
 
       // real
       case 0x20:
@@ -158,10 +228,11 @@ class PlistParser {
       // date
       case 0x30:
         pos++;
-        var seconds = _bytesToDouble(
-            binary.bytes.getRange(pos, pos + 8).toList(), 8);
+        var seconds =
+            _bytesToDouble(binary.bytes.getRange(pos, pos + 8).toList(), 8);
         // 8 bytes to apple epoch time
-        return DateTime(2001, 1, 1).add(Duration(seconds: seconds.toInt()));
+        var date = DateTime(2001, 1, 1).add(Duration(seconds: seconds.toInt()));
+        return date.add(date.timeZoneOffset).toUtc();
 
       // data
       case 0x40:
@@ -207,18 +278,21 @@ class PlistParser {
   int _bytesToInt(Iterable<int> bytes, int byteSize) {
     if (bytes.length == 0) {
       throw new Exception("bytes list is empty");
-    }
-    else if (bytes.length == 1) {
+    } else if (bytes.length == 1) {
       return bytes.first;
     }
 
     var byteData = ByteData.view(Uint8List.fromList(bytes.toList()).buffer);
 
     switch (byteSize) {
-      case 1: return byteData.getInt8(0);
-      case 2: return byteData.getInt16(0);
-      case 4: return byteData.getInt32(0);
-      case 8: return byteData.getInt64(0);
+      case 1:
+        return byteData.getInt8(0);
+      case 2:
+        return byteData.getInt16(0);
+      case 4:
+        return byteData.getInt32(0);
+      case 8:
+        return byteData.getInt64(0);
       default:
         throw new Exception("Undefined ByteSize: ${byteSize}");
     }
@@ -232,8 +306,10 @@ class PlistParser {
     var byteData = ByteData.view(Uint8List.fromList(bytes).buffer);
 
     switch (byteSize) {
-      case 4: return byteData.getFloat32(0);
-      case 8: return byteData.getFloat64(0);
+      case 4:
+        return byteData.getFloat32(0);
+      case 8:
+        return byteData.getFloat64(0);
       default:
         throw new Exception("Undefined ByteSize: $byteSize");
     }
@@ -256,30 +332,28 @@ class PlistParser {
     return bytes.getRange(pos, pos + length);
   }
 
-  _getObjectStartPos(BinaryData binary, int offset) {
-    var keyRefPos = (binary.offsetTableStartPos) +
-        (binary.offsetTableOffsetSize * offset);
+  _getObjectStartPos(_BinaryData binary, int offset) {
+    var keyRefPos =
+        (binary.offsetTableStartPos) + (binary.offsetTableOffsetSize * offset);
 
     return _bytesToInt(
-        binary.bytes.getRange(keyRefPos, keyRefPos + binary.offsetTableOffsetSize),
-        binary.offsetTableOffsetSize
-    );
+        binary.bytes
+            .getRange(keyRefPos, keyRefPos + binary.offsetTableOffsetSize),
+        binary.offsetTableOffsetSize);
   }
-
 }
 
-class BinaryData {
+class _BinaryData {
   Uint8List bytes = Uint8List(0);
   int offsetTableStartPos = 0;
   int offsetTableOffsetSize = 0;
   int startPos = 0;
 
-  BinaryData({
-    required this.bytes,
-    required this.offsetTableStartPos,
-    required this.offsetTableOffsetSize,
-    required this.startPos
-  });
+  _BinaryData(
+      {required this.bytes,
+      required this.offsetTableStartPos,
+      required this.offsetTableOffsetSize,
+      required this.startPos});
 }
 
 class NotFoundException implements Exception {
