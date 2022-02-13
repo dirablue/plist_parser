@@ -13,7 +13,7 @@ This was inspired by some libraries. please see below details.
 
 ```yaml
 dependencies:
-  plist_parser: "^0.0.1"
+  plist_parser: "^0.0.3"
 ```
 
 ## 🐕 Usage
