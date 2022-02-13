@@ -1,6 +1,7 @@
 # 📋 Plist Parser for Flutter
  
 [![pub package](https://img.shields.io/pub/v/plist_parser.svg)](https://pub.dartlang.org/packages/plist_parser)
+[![codecov](https://codecov.io/gh/dirablue/plist_parser/branch/master/graph/badge.svg?token=TI85EVM71J)](https://codecov.io/gh/dirablue/plist_parser)
 
 A Flutter Plugin for Plist parser supporting XML and Binary formats.
 

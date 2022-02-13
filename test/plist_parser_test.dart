@@ -196,6 +196,10 @@ void main() {
         // if false, use xml parser
         var map3 = PlistParser().parseFileSync(filePath, typeDetection: false);
         expect(map3, expected, reason: "typeDetection: false");
+
+        // not found file
+        expect(() => PlistParser().parseFileSync("dummy/dummy.plist"),
+            throwsA(isA<NotFoundException>()));
       });
 
       test('parseFileSync: binary', () {
@@ -234,6 +238,10 @@ void main() {
         var map3 =
             await PlistParser().parseFile(filePath, typeDetection: false);
         expect(map3, expected, reason: "typeDetection: false");
+
+        // not found file
+        expect(await () => PlistParser().parseFile("dummy/dummy.plist"),
+            throwsA(isA<NotFoundException>()));
       });
 
       test('parseFile: binary', () async {
@@ -280,6 +288,10 @@ void main() {
     test('parseXml', () async {
       var expected = PlistParser().parse(xml);
       expect(PlistParser().parseXml(xml), expected);
+
+      // no xml elements
+      expect(await () => PlistParser().parseXml("<div></div>"),
+          throwsA(isA<NotFoundException>()));
     });
 
     test('parseXmlFileSync', () {
@@ -287,6 +299,10 @@ void main() {
 
       var filePath = "${Directory.current.path}/test/test.plist";
       expect(PlistParser().parseXmlFileSync(filePath), expected);
+
+      // no xml elements
+      expect(() => PlistParser().parseXmlFileSync("<div></div>"),
+      throwsA(isA<NotFoundException>()));
     });
 
     test('parseXmlFile', () async {
@@ -294,6 +310,10 @@ void main() {
 
       var filePath = "${Directory.current.path}/test/test.plist";
       expect(await PlistParser().parseXmlFile(filePath), expected);
+
+      // no xml elements
+      expect(await () => PlistParser().parseXmlFile("dummy/dummy.plist"),
+          throwsA(isA<NotFoundException>()));
     });
 
     test('parseBinaryFileSync', () {
@@ -301,6 +321,10 @@ void main() {
 
       var filePath = "${Directory.current.path}/test/test_binary.plist";
       expect(PlistParser().parseBinaryFileSync(filePath), expected);
+
+      // not found file
+      expect(() => PlistParser().parseBinaryFileSync("dummy/dummy.plist"),
+        throwsA(isA<NotFoundException>()));
     });
 
     test('parseBinaryFile', () async {
@@ -308,6 +332,10 @@ void main() {
 
       var filePath = "${Directory.current.path}/test/test_binary.plist";
       expect(await PlistParser().parseBinaryFile(filePath), expected);
+
+      // not found file
+      expect(await () => PlistParser().parseBinaryFile("dummy/dummy.plist"),
+          throwsA(isA<NotFoundException>()));
     });
 
     test('parseBinaryBytes', () async {
@@ -317,5 +345,100 @@ void main() {
       expect(await PlistParser().parseBinaryBytes(file.readAsBytesSync()),
           expected);
     });
+
+    test('bytesToInt', () async {
+      var list = [1, 2, 3, 4];
+      var expected = ByteData.view(Uint8List.fromList(
+          list).buffer).getInt8(0);
+      expect(PlistParser().bytesToInt(list, 1), expected);
+
+      list = [1, 2, 3, 4, 5, 6, 7, 8];
+      expected = ByteData.view(Uint8List.fromList(
+          list).buffer).getInt16(0);
+      expect(PlistParser().bytesToInt(list, 2), expected);
+
+      list = [
+        1, 2, 3, 4,
+        5, 6, 7, 8,
+        9, 10, 11, 12,
+        13, 14, 15, 16
+      ];
+      expected = ByteData.view(Uint8List.fromList(
+          list).buffer).getInt32(0);
+      expect(PlistParser().bytesToInt(list, 4), expected);
+
+      list = [
+        1, 2, 3, 4,
+        5, 6, 7, 8,
+        9, 10, 11, 12,
+        13, 14, 15, 16,
+        1, 2, 3, 4,
+        5, 6, 7, 8,
+        9, 10, 11, 12,
+        13, 14, 15, 16,
+      ];
+      expected = ByteData.view(Uint8List.fromList(
+          list).buffer).getInt64(0);
+      expect(PlistParser().bytesToInt(list, 8), expected);
+
+      // if list is empty, it will be an error
+      list = [];
+      expect(
+          () => PlistParser().bytesToInt(list, 1),
+          throwsA(isA<Exception>()));
+
+      // if specified bytes is undefined, it will be an error
+      list = [1, 2, 3, 4];
+      expect(
+              () => PlistParser().bytesToInt(list, 7),
+          throwsA(isA<Exception>()));
+    });
+
+    test('bytesToDouble', () async {
+      var list = [
+        1, 2, 3, 4, 5, 6, 7, 8,
+        1, 2, 3, 4, 5, 6, 7, 8,
+        1, 2, 3, 4, 5, 6, 7, 8,
+        1, 2, 3, 4, 5, 6, 7, 8,
+      ];
+      var expected = ByteData.view(Uint8List.fromList(
+          list).buffer).getFloat32(0);
+      expect(PlistParser().bytesToDouble(list, 4), expected);
+
+      list = [
+        1, 2, 3, 4, 5, 6, 7, 8,
+        1, 2, 3, 4, 5, 6, 7, 8,
+        1, 2, 3, 4, 5, 6, 7, 8,
+        1, 2, 3, 4, 5, 6, 7, 8,
+
+        1, 2, 3, 4, 5, 6, 7, 8,
+        1, 2, 3, 4, 5, 6, 7, 8,
+        1, 2, 3, 4, 5, 6, 7, 8,
+        1, 2, 3, 4, 5, 6, 7, 8,
+      ];
+      expected = ByteData.view(Uint8List.fromList(
+          list).buffer).getFloat64(0);
+      expect(PlistParser().bytesToDouble(list, 8), expected);
+
+      // if list is empty, it will be an error
+      list = [];
+      expect(
+              () => PlistParser().bytesToDouble(list, 4),
+          throwsA(isA<Exception>()));
+
+      // if specified bytes is undefined, it will be an error
+      list = [1];
+      expect(
+              () => PlistParser().bytesToDouble(list, 1),
+          throwsA(isA<Exception>()));
+    });
+
+    test('NotFoundException', () {
+      expect(NotFoundException("test12345").toString(), matcherContainsString("test12345"));
+    });
   });
 }
+
+Matcher matcherContainsString(String substring) =>
+    predicate((String expected) => expected.contains(RegExp(substring, caseSensitive: false)));
+

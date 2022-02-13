@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:xml/xml.dart';
+import 'package:meta/meta.dart';
 
 class PlistParser {
   // Return an Map object for the given plist format string.
@@ -114,6 +115,10 @@ class PlistParser {
 
   Map parseBinaryFileSync(String path) {
     var file = File(path);
+    if (!file.existsSync()) {
+      throw NotFoundException('Not found plist file');
+    }
+
     var bytes = file.readAsBytesSync();
     return parseBinaryBytes(bytes);
   }
@@ -208,9 +213,8 @@ class PlistParser {
           return false;
         } else if (byte == 0x09) {
           return true;
-        } else {
-          throw Exception("Unknown bool byte encountered: $byte");
         }
+        break;
 
       // integer
       case 0x10:
@@ -275,6 +279,9 @@ class PlistParser {
     return null;
   }
 
+  @visibleForTesting
+  int bytesToInt(Iterable<int> bytes, int byteSize) => _bytesToInt(bytes, byteSize);
+
   int _bytesToInt(Iterable<int> bytes, int byteSize) {
     if (bytes.length == 0) {
       throw new Exception("bytes list is empty");
@@ -297,6 +304,9 @@ class PlistParser {
         throw new Exception("Undefined ByteSize: ${byteSize}");
     }
   }
+
+  @visibleForTesting
+  double bytesToDouble(List<int> bytes, int byteSize) => _bytesToDouble(bytes, byteSize);
 
   double _bytesToDouble(List<int> bytes, int byteSize) {
     if (bytes.length == 0) {
