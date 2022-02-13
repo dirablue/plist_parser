@@ -1,0 +1,35 @@
+name: Build
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  schedule:
+    # runs the CI weekly
+    - cron: "0 0 * * 0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: dev
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Run tests
+        run: dart test --coverage coverage
+
+      - name: Install lcov
+        run: sudo apt-get install -y lcov
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
