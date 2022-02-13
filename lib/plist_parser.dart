@@ -280,7 +280,8 @@ class PlistParser {
   }
 
   @visibleForTesting
-  int bytesToInt(Iterable<int> bytes, int byteSize) => _bytesToInt(bytes, byteSize);
+  int bytesToInt(Iterable<int> bytes, int byteSize) =>
+      _bytesToInt(bytes, byteSize);
 
   int _bytesToInt(Iterable<int> bytes, int byteSize) {
     if (bytes.length == 0) {
@@ -306,7 +307,8 @@ class PlistParser {
   }
 
   @visibleForTesting
-  double bytesToDouble(List<int> bytes, int byteSize) => _bytesToDouble(bytes, byteSize);
+  double bytesToDouble(List<int> bytes, int byteSize) =>
+      _bytesToDouble(bytes, byteSize);
 
   double _bytesToDouble(List<int> bytes, int byteSize) {
     if (bytes.length == 0) {
