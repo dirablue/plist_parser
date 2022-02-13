@@ -1,6 +1,6 @@
 name: plist_parser
 description: A Flutter Plugin for Plist parser supporting XML and Binary formats.
-version: 0.0.2
+version: 0.0.3
 repository: https://github.com/dirablue/plist_parser
 
 environment:
@@ -8,6 +8,7 @@ environment:
 
 dependencies:
   xml: ^5.3.1
+  meta: ^1.7.0
 
 dev_dependencies:
   flutter_lints: ^1.0.0
