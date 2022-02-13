@@ -56,32 +56,43 @@ const xml = '''
 
 void main() async {
   // parse from xml string
+  //
+  // parse method detects plist format and use xml or binary parser
+  // default is typeDetection = true
+  // to disable the detection, use typeDetection = false
   var result = PlistParser().parse(xml);
   print(result);
   print("int_type: ${result["int_type"]}");
   print("array_type[1]: ${result["array_type"][1]}\n");
 
   // parse from plist file
-  PlistParser().parseFile("${Directory.current.path}/example/example.plist")
+  PlistParser()
+      .parseFile("${Directory.current.path}/example/example.plist")
       .then((value) => print("parseFile\n$result\n"));
 
   // parse from plist file sync
-  result = PlistParser().parseFileSync("${Directory.current.path}/example/example.plist");
+  result = PlistParser()
+      .parseFileSync("${Directory.current.path}/example/example.plist");
   print("parseFileSync\n$result\n");
 
   // parse from binary file
   var filePath = "${Directory.current.path}/example/example_binary.plist";
-  PlistParser().parseBinaryFile(filePath)
-  .then((value) {
+  PlistParser().parseBinaryFile(filePath).then((value) {
     print("parseBinaryFile\n$value\n");
   });
 
   // parse from binary file sync
   filePath = "${Directory.current.path}/example/example_binary.plist";
-  print("parseBinaryFileSync\n${PlistParser().parseBinaryFileSync(filePath)}\n");
+  print(
+      "parseBinaryFileSync\n${PlistParser().parseBinaryFileSync(filePath)}\n");
 
-  // parse from binary bytes
-  var file = File("${Directory.current.path}/example/example_binary.plist");
-  var bytes = file.readAsBytesSync();
-  print("parseBinaryBytes\n${PlistParser().parseBinaryBytes(bytes)}\n");
+  // parse from binary file sync
+  filePath = "${Directory.current.path}/example/example_binary.plist";
+  print(
+      "parseBinaryFileSync\n${PlistParser().parseBinaryFileSync(filePath)}\n");
+
+  // parse from binary file with type detection
+  var file = File(filePath);
+  var binaryText = String.fromCharCodes(file.readAsBytesSync());
+  print("parse for binary data\n${PlistParser().parse(binaryText)}\n");
 }
