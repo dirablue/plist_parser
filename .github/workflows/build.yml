@@ -6,8 +6,8 @@ on:
   pull_request:
     branches: [ master ]
   schedule:
-    # runs the CI weekly
-    - cron: "0 0 * * 0"
+    # runs the CI each 3 days
+    - cron: "0 0 */3 * *"
 
 jobs:
   build:

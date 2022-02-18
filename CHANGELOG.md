@@ -1,3 +1,7 @@
+## 0.0.4
+
+- Doc: Simplified the sample code and README.md
+
 ## 0.0.3
 
 - Add: Support parse type detection with typeDetection parameter.

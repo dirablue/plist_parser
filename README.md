@@ -5,7 +5,7 @@
 
 A Flutter Plugin for Plist parser supporting XML and Binary formats.
 
-It's written xml and binary parser from scratch for Dart and this is not dependent other native libraries.
+The parser is designed to read XML and Binary of plist format on Dart and Flutter.
 
 This was inspired by some libraries. please see below details.     
 
@@ -13,7 +13,7 @@ This was inspired by some libraries. please see below details.
 
 ```yaml
 dependencies:
-  plist_parser: "^0.0.3"
+  plist_parser: "^0.0.4"
 ```
 
 ## 🐕 Usage
@@ -48,53 +48,36 @@ const xml = '''
     <string>value1</string>
     <key>key2</key>
     <integer>2</integer>
-    <key>long_key_item_name_aaaaa_bbbbb_ccccc_ddddd_eeeee</key>
-    <string>long_key_item_value_11111_22222_33333_44444_55555</string>
   </dict>
   <key>array_type</key>
   <array>
     <string>array item1</string>
     <string>array item2</string>
   </array>
-  <key>array_type2</key>
-  <array>
-    <string>array2 item1</string>
-    <dict>
-      <key>nest_array</key>
-      <array>
-        <string>nest_array_item</string>
-      </array>
-      <key>nest_dict</key>
-      <dict>
-        <key>nest_dict_item</key>
-        <integer>12345</integer>
-      </dict>
-    </dict>
-  </array>
 </dict>
 </plist>
 ''';
 
-void main() {
-  // parse from xml string
+void main() async {
+  // Parse from xml string.
   //
-  // parse method detects plist format and use xml or binary parser
-  // default is typeDetection = true
-  // to disable the detection, use typeDetection = false
+  // Parse method detects the plist format automatically and use xml or binary parser.
+  // Default parameter: typeDetection = true.
+  // To disable the detection, use typeDetection = false then it will use xml parser.
   var result = PlistParser().parse(xml);
   print(result);
-  print("int_type: ${result["int_type"]}");
-  print("array_type[1]: ${result["array_type"][1]}\n");
 
-  // parse from binary file sync
-  filePath = "${Directory.current.path}/example/example_binary.plist";
-  print("parseBinaryFileSync\n${PlistParser().parseBinaryFileSync(filePath)}\n");
-  
-  // parse from binary file with auto type detection
-  // you can use typeDetection = false to disable the detection
-  var file = File(filePath);
-  var binaryText = String.fromCharCodes(file.readAsBytesSync());
-  print("parse for binary data\n${PlistParser().parse(binaryText)}\n");
+  // Parse from xml file.
+  //
+  // You can use "parseFile"(for Async) or "parseFileSync".
+  var result2 = PlistParser().parseFileSync("${Directory.current.path}/example/example.plist");
+  print(result2);
+
+  // Parse from binary file.
+  //
+  // It detects binary format and use binary parser automatically.
+  var result3 = PlistParser().parseFileSync("${Directory.current.path}/example/example_binary.plist");
+  print(result3);
 }
 ```
 
@@ -109,33 +92,10 @@ The output are these:
     bool_type_false: false, 
     date_type: 2022-02-11 18:27:45.000Z, 
     data_type: Test Value, 
-    dict_type: {
-        key1: value1, 
-        key2: 2, 
-        long_key_item_name_aaaaa_bbbbb_ccccc_ddddd_eeeee: long_key_item_value_11111_22222_33333_44444_55555
-    }, 
-    array_type: [
-        array item1, 
-        array item2
-    ], 
-    array_type2: [
-        array2 item1, 
-        {
-            nest_array: [nest_array_item], 
-            nest_dict: {
-                nest_dict_item: 12345
-            }
-        }
-    ]
+    dict_type: {key1: value1, key2: 2}, 
+    array_type: [array item1, array item2]
 }
-
-int_type: 12345
-array_type item2: array item2
-
-parseBinaryFileSync
-{array_type2: [array2 item1, {nest_dict: {nest_dict_item: 12345}, nest_array: [nest_array_item]}], date_type: 2022-02-11 18:27:45.000Z, double_type: 12.345, string_type: hello plist, bool_type_true: false, array_type: [array item1, array item2], bool_type_false: true, dict_type: {key1: value1, key2: 2, long_key_item_name_aaaaa_bbbbb_ccccc_ddddd_eeeee: long_key_item_value_11111_22222_33333_44444_55555}, data_type: Test Value, int_type: 12345}
-
-parseBinaryFile
+{string_type: hello plist, int_type: 12345, double_type: 12.345, bool_type_true: true, bool_type_false: false, date_type: 2022-02-11 18:27:45.000Z, data_type: Test Value, dict_type: {key1: value1, key2: 2, long_key_item_name_aaaaa_bbbbb_ccccc_ddddd_eeeee: long_key_item_value_11111_22222_33333_44444_55555}, array_type: [array item1, array item2], array_type2: [array2 item1, {nest_array: [nest_array_item], nest_dict: {nest_dict_item: 12345}}]}
 {array_type2: [array2 item1, {nest_dict: {nest_dict_item: 12345}, nest_array: [nest_array_item]}], date_type: 2022-02-11 18:27:45.000Z, double_type: 12.345, string_type: hello plist, bool_type_true: true, array_type: [array item1, array item2], bool_type_false: false, dict_type: {key1: value1, key2: 2, long_key_item_name_aaaaa_bbbbb_ccccc_ddddd_eeeee: long_key_item_value_11111_22222_33333_44444_55555}, data_type: Test Value, int_type: 12345}
 ```
 

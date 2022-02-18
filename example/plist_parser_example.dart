@@ -27,72 +27,34 @@ const xml = '''
     <string>value1</string>
     <key>key2</key>
     <integer>2</integer>
-    <key>long_key_item_name_aaaaa_bbbbb_ccccc_ddddd_eeeee</key>
-    <string>long_key_item_value_11111_22222_33333_44444_55555</string>
   </dict>
   <key>array_type</key>
   <array>
     <string>array item1</string>
     <string>array item2</string>
   </array>
-  <key>array_type2</key>
-  <array>
-    <string>array2 item1</string>
-    <dict>
-      <key>nest_array</key>
-      <array>
-        <string>nest_array_item</string>
-      </array>
-      <key>nest_dict</key>
-      <dict>
-        <key>nest_dict_item</key>
-        <integer>12345</integer>
-      </dict>
-    </dict>
-  </array>
 </dict>
 </plist>
 ''';
 
 void main() async {
-  // parse from xml string
+  // parse from xml string.
   //
-  // parse method detects plist format and use xml or binary parser
-  // default is typeDetection = true
-  // to disable the detection, use typeDetection = false
+  // parse method detects the plist format automatically and use xml or binary parser.
+  // default parameter: typeDetection = true
+  // to disable the detection, use typeDetection = false then it will use xml parser.
   var result = PlistParser().parse(xml);
   print(result);
-  print("int_type: ${result["int_type"]}");
-  print("array_type[1]: ${result["array_type"][1]}\n");
 
-  // parse from plist file
-  PlistParser()
-      .parseFile("${Directory.current.path}/example/example.plist")
-      .then((value) => print("parseFile\n$result\n"));
-
-  // parse from plist file sync
-  result = PlistParser()
+  // parse from xml file
+  // you can use "parseFile" or "parseFileSync"
+  var result2 = PlistParser()
       .parseFileSync("${Directory.current.path}/example/example.plist");
-  print("parseFileSync\n$result\n");
+  print(result2);
 
   // parse from binary file
-  var filePath = "${Directory.current.path}/example/example_binary.plist";
-  PlistParser().parseBinaryFile(filePath).then((value) {
-    print("parseBinaryFile\n$value\n");
-  });
-
-  // parse from binary file sync
-  filePath = "${Directory.current.path}/example/example_binary.plist";
-  print(
-      "parseBinaryFileSync\n${PlistParser().parseBinaryFileSync(filePath)}\n");
-
-  // parse from binary file sync
-  filePath = "${Directory.current.path}/example/example_binary.plist";
-  print(
-      "parseBinaryFileSync\n${PlistParser().parseBinaryFileSync(filePath)}\n");
-
-  // parse from binary file with type detection
-  var file = File(filePath);
-  var binaryText = String.fromCharCodes(file.readAsBytesSync());
-  print("parse for binary data\n${PlistParser().parse(binaryText)}\n");
+  // it detects binary format automatically
+  var result3 = PlistParser()
+      .parseFileSync("${Directory.current.path}/example/example_binary.plist");
+  print(result3);
 }
