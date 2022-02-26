@@ -1,3 +1,7 @@
+## 0.0.5
+
+- Fix: fixed to support unicode data format.
+
 ## 0.0.4
 
 - Doc: Simplified the sample code and README.md

@@ -1,5 +1,5 @@
 # 📋 Plist Parser for Flutter
- 
+
 [![pub package](https://img.shields.io/pub/v/plist_parser.svg)](https://pub.dartlang.org/packages/plist_parser)
 [![codecov](https://codecov.io/gh/dirablue/plist_parser/branch/master/graph/badge.svg?token=TI85EVM71J)](https://codecov.io/gh/dirablue/plist_parser)
 
@@ -7,13 +7,13 @@ A Flutter Plugin for Plist parser supporting XML and Binary formats.
 
 The parser is designed to read XML and Binary of plist format on Dart and Flutter.
 
-This was inspired by some libraries. please see below details.     
+This was inspired by some libraries. please see below details.
 
-## 🔧 Installation 
+## 🔧 Installation
 
 ```yaml
 dependencies:
-  plist_parser: "^0.0.4"
+  plist_parser: "^0.0.5"
 ```
 
 ## 🐕 Usage
@@ -76,12 +76,14 @@ void main() async {
   // Parse from binary file.
   //
   // It detects binary format and use binary parser automatically.
-  var result3 = PlistParser().parseFileSync("${Directory.current.path}/example/example_binary.plist");
+  var result3 = PlistParser().parseFileSync(
+      "${Directory.current.path}/example/example_binary.plist");
   print(result3);
 }
 ```
 
 The output are these:
+
 ```
 // ※ Formatted for readability
 {
@@ -101,7 +103,7 @@ The output are these:
 
 Other examples are stored in /example/plist_parser_example.dart
 
-## ✨ Inspiration 
+## ✨ Inspiration
 
 * https://github.com/gjersvik/plist
 * https://github.com/animetrics/PlistCpp
