@@ -1,10 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:plist_parser/plist_parser.dart';
 import 'package:test/test.dart';
-import 'dart:convert';
-
 import 'package:xml/xml.dart';
 
 void main() {
@@ -58,6 +57,17 @@ void main() {
       </array>
     </dict>
     </plist>
+  ''';
+
+  const unicodeXml = '''
+  <?xml version="1.0" encoding="UTF-8"?>
+  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+  <plist version="1.0">
+    <dict>
+      <key>unicode</key>
+      <string>Copyright © 2022 </string>
+    </dict>
+  </plist>
   ''';
 
   group('PlistParser', () {
@@ -419,9 +429,46 @@ void main() {
           throwsA(isA<Exception>()));
     });
 
+    group('parse unicode', () {
+      var copyright = "Copyright © 2022 ";
+
+      test('xml text', () async {
+        var map = await PlistParser().parse(unicodeXml);
+        var expected = copyright;
+
+        expect(map["unicode"], expected);
+      });
+
+      test('xml file', () async {
+        var fileName = "${Directory.current.path}/test/test_unicode_xml.plist";
+        var map = PlistParser().parseFileSync(fileName);
+        var expected = copyright;
+
+        expect(map["unicode"], expected);
+      });
+
+      test('binary file', () async {
+        var fileName = "${Directory.current.path}/test/test_unicode.plist";
+        var map = PlistParser().parseFileSync(fileName);
+
+        var expected = copyright;
+        var expectedMap = await PlistParser().parse(unicodeXml);
+
+        expect(map["unicode"], expected);
+        expect(map, expectedMap);
+      });
+    });
+
     test('NotFoundException', () {
       expect(NotFoundException("test12345").toString(),
           matcherContainsString("test12345"));
+    });
+
+    test('getObjectBytes', () {
+      // invalid unitByte value
+      expect(
+          () => PlistParser().getObjectBytes([1, 2, 3, 4], 1, 0, unitByte: 3),
+          throwsA(isA<Exception>()));
     });
   });
 }
