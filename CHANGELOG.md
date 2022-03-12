@@ -1,3 +1,7 @@
+## 0.0.6
+
+- Fix: fixed the parsing issue of binary parser
+
 ## 0.0.5
 
 - Fix: fixed to support unicode data format.
