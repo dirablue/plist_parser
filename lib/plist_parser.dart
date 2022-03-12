@@ -4,8 +4,9 @@ import 'dart:convert' show utf8, base64;
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
-import 'package:xml/xml.dart';
+
 import 'package:meta/meta.dart';
+import 'package:xml/xml.dart';
 
 class PlistParser {
   // Return an Map object for the given plist format string.
@@ -152,6 +153,11 @@ class PlistParser {
     var offsetTableOffsetSize = _bytesToInt(
         dataBytes.getRange(offsetTableOffsetPos, offsetTableOffsetPos + 1), 1);
 
+    // object ref size
+    var objectRefSizePos = trailerStartPos + 7;
+    var objectRefSize = _bytesToInt(
+        dataBytes.getRange(objectRefSizePos, objectRefSizePos + 1), 1);
+
     // offset table start ref
     var offsetTableStartPos = _bytesToInt(
         dataBytes.getRange(
@@ -168,7 +174,8 @@ class PlistParser {
         bytes: dataBytes,
         offsetTableOffsetSize: offsetTableOffsetSize,
         offsetTableStartPos: offsetTableStartPos,
-        startPos: startPos);
+        startPos: startPos,
+        objectRefSize: objectRefSize);
 
     return _handleBinary(binaryData, startPos);
   }
@@ -252,24 +259,23 @@ class PlistParser {
 
       // data
       case 0x40:
-        return String.fromCharCodes(
-            _getObjectBytes(binary.bytes, byte, pos).bytes);
+        return String.fromCharCodes(_getObjectBytes(binary.bytes, byte, pos));
 
       // string
       case 0x50:
-        return String.fromCharCodes(
-            _getObjectBytes(binary.bytes, byte, pos).bytes);
+        return String.fromCharCodes(_getObjectBytes(binary.bytes, byte, pos));
 
       // unicode
       case 0x60:
         return String.fromCharCodes(
-            _getObjectBytes(binary.bytes, byte, pos, unitByte: 2).bytes);
+            _getObjectBytes(binary.bytes, byte, pos, unitByte: 2));
 
       // array
       case 0xA0:
         List<Object> list = [];
-        var itemOffsetList =
-            _getObjectBytes(binary.bytes, byte, pos).bytes.toList();
+        var itemOffsetList = _getObjectBytes(binary.bytes, byte, pos,
+                unitByte: binary.objectRefSize)
+            .toList();
         for (var i = 0; i < itemOffsetList.length; i++) {
           var itemPos = _getObjectStartPos(binary, itemOffsetList[i]);
           var itemValue = _handleBinary(binary, itemPos);
@@ -279,21 +285,20 @@ class PlistParser {
 
       // dictionary
       case 0xD0:
-        var objectBytes = _getObjectBytes(binary.bytes, byte, pos);
-        var objectSize = objectBytes.size;
-
-        var keyOffsetList = objectBytes.bytes.toList();
+        var unitByte = binary.objectRefSize;
+        var dictOffsetList = _getObjectBytes(binary.bytes, byte, pos,
+                unitByte: unitByte, sizeScale: 2)
+            .toList();
 
         var map = {};
-        for (var i = 0; i < keyOffsetList.length; i++) {
+        var keySize = dictOffsetList.length ~/ 2;
+        for (var i = 0; i < keySize; i++) {
           // key
-          var keyPos = _getObjectStartPos(binary, keyOffsetList[i]);
+          var keyPos = _getObjectStartPos(binary, dictOffsetList[i]);
           var keyName = _handleBinary(binary, keyPos);
 
-          // value
-          var valueOffset =
-              binary.bytes[pos + objectSize + i + keyOffsetList.length];
-          var valuePos = _getObjectStartPos(binary, valueOffset);
+          var valuePos =
+              _getObjectStartPos(binary, dictOffsetList[i + keySize]);
           var value = _handleBinary(binary, valuePos);
 
           map[keyName] = value;
@@ -352,13 +357,12 @@ class PlistParser {
   }
 
   @visibleForTesting
-  _ObjectBytes getObjectBytes(List<int> bytes, int byte, int pos,
-          {int unitByte = 1}) =>
+  Iterable<int> getObjectBytes(List<int> bytes, int byte, int pos,
+          {int unitByte = 1, int sizeScale = 1}) =>
       _getObjectBytes(bytes, byte, pos, unitByte: unitByte);
 
-  _ObjectBytes _getObjectBytes(List<int> bytes, int byte, int pos,
-      {int unitByte = 1}) {
-    var firstPos = pos;
+  Iterable<int> _getObjectBytes(List<int> bytes, int byte, int pos,
+      {int unitByte = 1, int sizeScale = 1}) {
     var length = byte & 0xF;
     if (length == 0xF) {
       // check additional information to detect string length
@@ -366,9 +370,12 @@ class PlistParser {
       var num = bytes[pos] & 0xF;
       var size = pow(2, num).toInt();
       pos++;
-      length = _bytesToInt(bytes.getRange(pos, pos + size), size) * unitByte;
+      length = _bytesToInt(bytes.getRange(pos, pos + size), size) *
+          unitByte *
+          sizeScale;
       pos += size;
     } else {
+      length *= (unitByte * sizeScale);
       pos++;
     }
 
@@ -380,8 +387,8 @@ class PlistParser {
       case 2:
         List<int> newResultBytes = [];
         for (var i = 0; i < resultBytes.length; i++) {
-          newResultBytes.add(_bytesToInt(
-              [resultBytes.elementAt(i), resultBytes.elementAt(i + 1)], 2));
+          newResultBytes.add(
+              (resultBytes.elementAt(i) << 8) + resultBytes.elementAt(i + 1));
           i++;
         }
         resultBytes = newResultBytes;
@@ -390,7 +397,7 @@ class PlistParser {
         throw new Exception("Undefined unitByte: ${unitByte}");
     }
 
-    return _ObjectBytes(bytes: resultBytes, size: pos - firstPos);
+    return resultBytes;
   }
 
   _getObjectStartPos(_BinaryData binary, int offset) {
@@ -409,22 +416,20 @@ class _BinaryData {
   int offsetTableStartPos = 0;
   int offsetTableOffsetSize = 0;
   int startPos = 0;
+  int objectRefSize = 0;
 
-  _BinaryData(
-      {required this.bytes,
-      required this.offsetTableStartPos,
-      required this.offsetTableOffsetSize,
-      required this.startPos});
-}
-
-class _ObjectBytes {
-  Iterable<int> bytes = [];
-  int size = 0;
-  _ObjectBytes({required this.bytes, required this.size});
+  _BinaryData({
+    required this.bytes,
+    required this.offsetTableStartPos,
+    required this.offsetTableOffsetSize,
+    required this.startPos,
+    required this.objectRefSize,
+  });
 }
 
 class NotFoundException implements Exception {
   String message;
+
   NotFoundException(this.message);
 
   @override
