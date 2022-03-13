@@ -1,6 +1,8 @@
+import 'dart:io';
+
 import 'package:plist_parser/plist_parser.dart';
 
-import 'dart:io';
+// ignore_for_file: avoid_print
 
 const xml = '''
 <?xml version="1.0" encoding="UTF-8"?>
@@ -40,9 +42,11 @@ const xml = '''
 void main() async {
   // parse from xml string.
   //
-  // parse method detects the plist format automatically and use xml or binary parser.
+  // parse method detects the plist format automatically and use xml or
+  // binary parser.
   // default parameter: typeDetection = true
-  // to disable the detection, use typeDetection = false then it will use xml parser.
+  // to disable the detection, use typeDetection = false
+  // then it will use xml parser.
   var result = PlistParser().parse(xml);
   print(result);
 
