@@ -250,7 +250,7 @@ void main() {
         expect(map3, expected, reason: "typeDetection: false");
 
         // not found file
-        expect(await () => PlistParser().parseFile("dummy/dummy.plist"),
+        expect(() => PlistParser().parseFile("dummy/dummy.plist"),
             throwsA(isA<NotFoundException>()));
       });
 
@@ -267,8 +267,7 @@ void main() {
         expect(map2, expected, reason: "typeDetection: true");
 
         // if true, use xml parser and it will be an error
-        expect(
-            await () => PlistParser().parseFile(filePath, typeDetection: false),
+        expect(() => PlistParser().parseFile(filePath, typeDetection: false),
             throwsA(isA<XmlParserException>()));
       });
     });
@@ -300,7 +299,7 @@ void main() {
       expect(PlistParser().parseXml(xml), expected);
 
       // no xml elements
-      expect(await () => PlistParser().parseXml("<div></div>"),
+      expect(() => PlistParser().parseXml("<div></div>"),
           throwsA(isA<NotFoundException>()));
     });
 
@@ -322,7 +321,7 @@ void main() {
       expect(await PlistParser().parseXmlFile(filePath), expected);
 
       // no xml elements
-      expect(await () => PlistParser().parseXmlFile("dummy/dummy.plist"),
+      expect(() => PlistParser().parseXmlFile("dummy/dummy.plist"),
           throwsA(isA<NotFoundException>()));
     });
 
@@ -344,7 +343,7 @@ void main() {
       expect(await PlistParser().parseBinaryFile(filePath), expected);
 
       // not found file
-      expect(await () => PlistParser().parseBinaryFile("dummy/dummy.plist"),
+      expect(() => PlistParser().parseBinaryFile("dummy/dummy.plist"),
           throwsA(isA<NotFoundException>()));
     });
 
@@ -352,8 +351,7 @@ void main() {
       var expected = PlistParser().parse(xml);
 
       var file = File("${Directory.current.path}/test/test_binary.plist");
-      expect(await PlistParser().parseBinaryBytes(file.readAsBytesSync()),
-          expected);
+      expect(PlistParser().parseBinaryBytes(file.readAsBytesSync()), expected);
     });
 
     test('bytesToInt', () async {
@@ -433,7 +431,7 @@ void main() {
       var copyright = "Copyright © 2022 ";
 
       test('xml text', () async {
-        var map = await PlistParser().parse(unicodeXml);
+        var map = PlistParser().parse(unicodeXml);
         var expected = copyright;
 
         expect(map["unicode"], expected);
@@ -452,7 +450,7 @@ void main() {
         var map = PlistParser().parseFileSync(fileName);
 
         var expected = copyright;
-        var expectedMap = await PlistParser().parse(unicodeXml);
+        var expectedMap = PlistParser().parse(unicodeXml);
 
         expect(map["unicode"], expected);
         expect(map, expectedMap);
