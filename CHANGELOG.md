@@ -1,6 +1,11 @@
+## 0.0.7
+
+- Add: Added lints dependency.
+- Fix: Modify code formats.
+
 ## 0.0.6
 
-- Fix: fixed the parsing issue of binary parser
+- Fix: fixed the parsing issue of binary parser.
 
 ## 0.0.5
 
