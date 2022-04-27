@@ -158,6 +158,11 @@ class PlistParser {
 
   /// Return an Map object for the given the path of Binary plist format bytes.
   Map parseBinaryBytes(Uint8List dataBytes) {
+    // Only bplist00 format is supported
+    if (String.fromCharCodes(dataBytes.getRange(0, 8)) != "bplist00") {
+      throw UnimplementedError("Invalid binary plist format");
+    }
+
     var trailerStartPos = dataBytes.length - 32;
 
     // offset table offset size
