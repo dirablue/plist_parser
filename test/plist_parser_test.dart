@@ -89,8 +89,7 @@ void main() {
         expect(map["date_type"], DateTime.parse("2022-02-11T18:27:45Z"));
 
         // decode base64 string
-        expect(map["data_type"],
-            String.fromCharCodes(base64.decode("VGVzdCBWYWx1ZQ==")));
+        expect(map["data_type"], base64.decode("VGVzdCBWYWx1ZQ=="));
 
         // dictionary
         {

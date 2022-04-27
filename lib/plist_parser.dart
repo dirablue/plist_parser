@@ -214,7 +214,7 @@ class PlistParser {
       case 'date':
         return DateTime.parse(elem.text);
       case 'data':
-        return String.fromCharCodes(base64.decode(elem.text));
+        return base64.decode(elem.text);
       case 'array':
         return elem.children
             .where(_isElement)
@@ -278,7 +278,7 @@ class PlistParser {
 
       // data
       case 0x40:
-        return String.fromCharCodes(_getObjectBytes(binary.bytes, byte, pos));
+        return Uint8List.fromList(_getObjectBytes(binary.bytes, byte, pos).toList());
 
       // string
       case 0x50:
