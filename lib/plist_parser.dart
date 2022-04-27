@@ -256,7 +256,9 @@ class PlistParser {
       case 0x10:
         var length = 1 << (byte & 0xf);
         pos++;
-        return _bytesToInt(binary.bytes.getRange(pos, pos + length), length);
+        // Signed integers are always stored with 8 bytes
+        return _bytesToInt(binary.bytes.getRange(pos, pos + length), length,
+            signed: length == 8);
 
       // real
       case 0x20:
@@ -329,7 +331,7 @@ class PlistParser {
   int bytesToInt(Iterable<int> bytes, int byteSize) =>
       _bytesToInt(bytes, byteSize);
 
-  int _bytesToInt(Iterable<int> bytes, int byteSize) {
+  int _bytesToInt(Iterable<int> bytes, int byteSize, {bool signed = false}) {
     if (bytes.isEmpty) {
       throw Exception("bytes list is empty");
     } else if (bytes.length == 1) {
@@ -338,17 +340,32 @@ class PlistParser {
 
     var byteData = ByteData.view(Uint8List.fromList(bytes.toList()).buffer);
 
-    switch (byteSize) {
-      case 1:
-        return byteData.getInt8(0);
-      case 2:
-        return byteData.getInt16(0);
-      case 4:
-        return byteData.getInt32(0);
-      case 8:
-        return byteData.getInt64(0);
-      default:
-        throw Exception("Undefined ByteSize: $byteSize");
+    if (signed) {
+      switch (byteSize) {
+        case 1:
+          return byteData.getInt8(0);
+        case 2:
+          return byteData.getInt16(0);
+        case 4:
+          return byteData.getInt32(0);
+        case 8:
+          return byteData.getInt64(0);
+        default:
+          throw Exception("Undefined ByteSize: $byteSize");
+      }
+    } else {
+      switch (byteSize) {
+        case 1:
+          return byteData.getUint8(0);
+        case 2:
+          return byteData.getUint16(0);
+        case 4:
+          return byteData.getUint32(0);
+        case 8:
+          return byteData.getUint64(0);
+        default:
+          throw Exception("Undefined ByteSize: $byteSize");
+      }
     }
   }
 
