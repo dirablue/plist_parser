@@ -199,7 +199,7 @@ class PlistParser {
 
   bool _isElement(XmlNode node) => node.nodeType == XmlNodeType.ELEMENT;
 
-  _handleElem(XmlElement elem) {
+  dynamic _handleElem(XmlElement elem) {
     switch (elem.name.local) {
       case 'string':
         return elem.text;
@@ -240,7 +240,7 @@ class PlistParser {
     return Map.fromIterables(keys, values);
   }
 
-  _handleBinary(_BinaryData binary, int pos) {
+  dynamic _handleBinary(_BinaryData binary, int pos) {
     var byte = binary.bytes[pos];
     switch (byte & 0xF0) {
       // bool
@@ -278,7 +278,8 @@ class PlistParser {
 
       // data
       case 0x40:
-        return Uint8List.fromList(_getObjectBytes(binary.bytes, byte, pos).toList());
+        return Uint8List.fromList(
+            _getObjectBytes(binary.bytes, byte, pos).toList());
 
       // string
       case 0x50:
@@ -434,7 +435,7 @@ class PlistParser {
     return resultBytes;
   }
 
-  _getObjectStartPos(_BinaryData binary, int offset) {
+  dynamic _getObjectStartPos(_BinaryData binary, int offset) {
     var keyRefPos =
         (binary.offsetTableStartPos) + (binary.offsetTableOffsetSize * offset);
 
