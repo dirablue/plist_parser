@@ -16,6 +16,12 @@ void main() {
       <string>hello plist</string>
       <key>int_type</key>
       <integer>12345</integer>
+      <key>int_short</key>
+      <integer>253</integer>
+      <key>int_16bit</key>
+      <integer>42767</integer>
+      <key>int_negative</key>
+      <integer>-2354</integer>
       <key>double_type</key>
       <real>12.345</real>
       <key>bool_type_true</key>
