@@ -362,15 +362,24 @@ void main() {
     test('bytesToInt', () async {
       var list = [1, 2, 3, 4];
       var expected = ByteData.view(Uint8List.fromList(list).buffer).getInt8(0);
-      expect(PlistParser().bytesToInt(list, 1), expected);
+      expect(
+          PlistParser()
+              .bytesToInt(ByteData.view(Uint8List.fromList(list).buffer), 1),
+          expected);
 
       list = [1, 2, 3, 4, 5, 6, 7, 8];
       expected = ByteData.view(Uint8List.fromList(list).buffer).getInt16(0);
-      expect(PlistParser().bytesToInt(list, 2), expected);
+      expect(
+          PlistParser()
+              .bytesToInt(ByteData.view(Uint8List.fromList(list).buffer), 2),
+          expected);
 
       list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
       expected = ByteData.view(Uint8List.fromList(list).buffer).getInt32(0);
-      expect(PlistParser().bytesToInt(list, 4), expected);
+      expect(
+          PlistParser()
+              .bytesToInt(ByteData.view(Uint8List.fromList(list).buffer), 4),
+          expected);
 
       list = [
         1, 2, 3, 4, //
@@ -383,17 +392,22 @@ void main() {
         13, 14, 15, 16, //
       ];
       expected = ByteData.view(Uint8List.fromList(list).buffer).getInt64(0);
-      expect(PlistParser().bytesToInt(list, 8), expected);
+      expect(
+          PlistParser()
+              .bytesToInt(ByteData.view(Uint8List.fromList(list).buffer), 8),
+          expected);
 
       // if list is empty, it will be an error
       list = [];
-      expect(
-          () => PlistParser().bytesToInt(list, 1), throwsA(isA<Exception>()));
+      expect(() => PlistParser().bytesToInt(ByteData(0), 1),
+          throwsA(isA<Exception>()));
 
       // if specified bytes is undefined, it will be an error
       list = [1, 2, 3, 4];
       expect(
-          () => PlistParser().bytesToInt(list, 7), throwsA(isA<Exception>()));
+          () => PlistParser()
+              .bytesToInt(ByteData.view(Uint8List.fromList(list).buffer), 7),
+          throwsA(isA<Exception>()));
     });
 
     test('bytesToDouble', () async {
@@ -405,7 +419,10 @@ void main() {
       ];
       var expected =
           ByteData.view(Uint8List.fromList(list).buffer).getFloat32(0);
-      expect(PlistParser().bytesToDouble(list, 4), expected);
+      expect(
+          PlistParser()
+              .bytesToDouble(ByteData.view(Uint8List.fromList(list).buffer), 4),
+          expected);
 
       list = [
         1, 2, 3, 4, 5, 6, 7, 8, //
@@ -419,16 +436,21 @@ void main() {
         1, 2, 3, 4, 5, 6, 7, 8, //
       ];
       expected = ByteData.view(Uint8List.fromList(list).buffer).getFloat64(0);
-      expect(PlistParser().bytesToDouble(list, 8), expected);
+      expect(
+          PlistParser()
+              .bytesToDouble(ByteData.view(Uint8List.fromList(list).buffer), 8),
+          expected);
 
       // if list is empty, it will be an error
       list = [];
-      expect(() => PlistParser().bytesToDouble(list, 4),
+      expect(() => PlistParser().bytesToDouble(ByteData(0), 4),
           throwsA(isA<Exception>()));
 
       // if specified bytes is undefined, it will be an error
       list = [1];
-      expect(() => PlistParser().bytesToDouble(list, 1),
+      expect(
+          () => PlistParser()
+              .bytesToDouble(ByteData.view(Uint8List.fromList(list).buffer), 1),
           throwsA(isA<Exception>()));
     });
 
@@ -465,13 +487,6 @@ void main() {
     test('NotFoundException', () {
       expect(NotFoundException("test12345").toString(),
           matcherContainsString("test12345"));
-    });
-
-    test('getObjectBytes', () {
-      // invalid unitByte value
-      expect(
-          () => PlistParser().getObjectBytes([1, 2, 3, 4], 1, 0, unitByte: 3),
-          throwsA(isA<Exception>()));
     });
   });
 }
