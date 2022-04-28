@@ -280,13 +280,14 @@ class PlistParser {
       case 0x60:
         final byteData =
             _getObjectDataBytes(binary.bytes, byte, pos, unitByte: 2);
-        List<int> codepoints = [];
+        final stringBuilder = StringBuffer();
 
         // UTF16-be decode
         for (var i = 0; i < byteData.lengthInBytes; i += 2) {
-          codepoints.add(byteData.getUint16(i));
+          stringBuilder.writeCharCode(byteData.getUint16(i));
         }
-        return String.fromCharCodes(codepoints);
+
+        return stringBuilder.toString();
 
       // array
       case 0xA0:
