@@ -374,6 +374,15 @@ void main() {
               .bytesToInt(ByteData.view(Uint8List.fromList(list).buffer), 2),
           expected);
 
+      list = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+      expected =
+          ByteData.view(Uint8List.fromList(list.sublist(1)).buffer).getInt16(0);
+      expect(
+          PlistParser().bytesToInt(
+              ByteData.view(Uint8List.fromList(list).buffer), 2,
+              offset: 1),
+          expected);
+
       list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
       expected = ByteData.view(Uint8List.fromList(list).buffer).getInt32(0);
       expect(
@@ -407,6 +416,13 @@ void main() {
       expect(
           () => PlistParser()
               .bytesToInt(ByteData.view(Uint8List.fromList(list).buffer), 7),
+          throwsA(isA<Exception>()));
+
+      // if specified size is not ^2, it will be an error
+      list = [1, 2, 3, 4];
+      expect(
+          () => PlistParser()
+              .bytesToInt(ByteData.view(Uint8List.fromList(list).buffer), 3),
           throwsA(isA<Exception>()));
     });
 
@@ -487,6 +503,13 @@ void main() {
     test('NotFoundException', () {
       expect(NotFoundException("test12345").toString(),
           matcherContainsString("test12345"));
+    });
+
+    test('InvalidBinaryPlistFormat', () {
+      expect(
+          () => PlistParser()
+              .parseBinaryBytes(ascii.encoder.convert("bplist15000")),
+          throwsA(isA<UnimplementedError>()));
     });
   });
 }

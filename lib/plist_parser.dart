@@ -247,7 +247,7 @@ class PlistParser {
         pos++;
         // Signed integers are always stored with 8 bytes
         return _bytesToInt(binary.bytes.buffer.asByteData(pos, length), length,
-            signed: length == 8);
+            signed64Bit: true);
 
       // real
       case 0x20:
@@ -332,40 +332,30 @@ class PlistParser {
   }
 
   @visibleForTesting
-  int bytesToInt(ByteData bytes, int byteSize) => _bytesToInt(bytes, byteSize);
+  int bytesToInt(ByteData bytes, int byteSize, {int offset = 0}) =>
+      _bytesToInt(bytes, byteSize, offset: offset);
 
   int _bytesToInt(ByteData byteData, int byteSize,
-      {int offset = 0, bool signed = false}) {
+      {int offset = 0, bool signed64Bit = false}) {
     if (byteData.lengthInBytes < byteSize) {
       throw Exception("bytes list size is invalid");
     }
 
-    if (signed) {
-      switch (byteSize) {
-        case 1:
-          return byteData.getInt8(offset);
-        case 2:
-          return byteData.getInt16(offset);
-        case 4:
-          return byteData.getInt32(offset);
-        case 8:
+    switch (byteSize) {
+      case 1:
+        return byteData.getUint8(offset);
+      case 2:
+        return byteData.getUint16(offset);
+      case 4:
+        return byteData.getUint32(offset);
+      case 8:
+        if (signed64Bit) {
           return byteData.getInt64(offset);
-        default:
-          throw Exception("Undefined ByteSize: $byteSize");
-      }
-    } else {
-      switch (byteSize) {
-        case 1:
-          return byteData.getUint8(offset);
-        case 2:
-          return byteData.getUint16(offset);
-        case 4:
-          return byteData.getUint32(offset);
-        case 8:
+        } else {
           return byteData.getUint64(offset);
-        default:
-          throw Exception("Undefined ByteSize: $byteSize");
-      }
+        }
+      default:
+        throw Exception("Undefined ByteSize: $byteSize");
     }
   }
 
