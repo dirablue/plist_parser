@@ -199,7 +199,7 @@ void main() {
       test('parseFileSync: xml', () {
         var expected = PlistParser().parse(xml);
 
-        var filePath = "${Directory.current.path}/test/test.plist";
+        var filePath = "${Directory.current.path}/test/test_xml.plist";
 
         var map = PlistParser().parseFileSync(filePath);
         expect(map, expected);
@@ -240,7 +240,7 @@ void main() {
       test('parseFile: xml', () async {
         var expected = PlistParser().parse(xml);
 
-        var filePath = "${Directory.current.path}/test/test.plist";
+        var filePath = "${Directory.current.path}/test/test_xml.plist";
 
         var map = await PlistParser().parseFile(filePath);
         expect(map, expected);
@@ -311,7 +311,7 @@ void main() {
     test('parseXmlFileSync', () {
       var expected = PlistParser().parse(xml);
 
-      var filePath = "${Directory.current.path}/test/test.plist";
+      var filePath = "${Directory.current.path}/test/test_xml.plist";
       expect(PlistParser().parseXmlFileSync(filePath), expected);
 
       // no xml elements
@@ -322,7 +322,7 @@ void main() {
     test('parseXmlFile', () async {
       var expected = PlistParser().parse(xml);
 
-      var filePath = "${Directory.current.path}/test/test.plist";
+      var filePath = "${Directory.current.path}/test/test_xml.plist";
       expect(await PlistParser().parseXmlFile(filePath), expected);
 
       // no xml elements
@@ -489,7 +489,8 @@ void main() {
       });
 
       test('binary file', () async {
-        var fileName = "${Directory.current.path}/test/test_unicode.plist";
+        var fileName =
+            "${Directory.current.path}/test/test_unicode_binary.plist";
         var map = PlistParser().parseFileSync(fileName);
 
         var expected = copyright;
