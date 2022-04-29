@@ -102,9 +102,13 @@ class PlistParser {
 
   /// Return an Map object for the given the path of XML plist format string.
   Map parseXml(String xml) {
-    var doc = XmlDocument.parse(xml);
-    var elements =
-        doc.rootElement.children.where(_isElement).cast<XmlElement>();
+    Iterable<XmlElement> elements;
+    try {
+      var doc = XmlDocument.parse(xml);
+      elements = doc.rootElement.children.where(_isElement).cast<XmlElement>();
+    } on Error catch (e) {
+      throw XmlParserException(e.toString());
+    }
     if (elements.isEmpty) {
       throw NotFoundException('Not found plist elements');
     }
