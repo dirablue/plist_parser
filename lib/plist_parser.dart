@@ -89,17 +89,16 @@ class PlistParser {
 
   static final _whitespaceReg = RegExp(r'\s+');
 
-  // ignore: constant_identifier_names
-  static const _BPLIST = "bplist";
+  static const _bplist = "bplist";
 
   /// check if text is binary
   isBinaryTypeText(String text) {
-    return text.substring(0, 6) == _BPLIST;
+    return text.substring(0, 6) == _bplist;
   }
 
   /// check if dataBytes is binary
   isBinaryTypeBytes(Uint8List dataBytes) {
-    return String.fromCharCodes(dataBytes.getRange(0, 6)) == _BPLIST;
+    return String.fromCharCodes(dataBytes.getRange(0, 6)) == _bplist;
   }
 
   /// Return an Map object for the given the path of XML plist format string.
