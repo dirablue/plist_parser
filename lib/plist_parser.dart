@@ -87,6 +87,8 @@ class PlistParser {
     });
   }
 
+  static final _whitespaceReg = RegExp(r'\s+');
+
   // ignore: constant_identifier_names
   static const _BPLIST = "bplist";
 
@@ -213,7 +215,8 @@ class PlistParser {
       case 'date':
         return DateTime.parse(elem.text);
       case 'data':
-        return String.fromCharCodes(base64.decode(elem.text));
+        return String.fromCharCodes(
+            base64.decode(elem.text.replaceAll(_whitespaceReg, '')));
       case 'array':
         return elem.children
             .where(_isElement)
