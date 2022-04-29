@@ -208,8 +208,7 @@ class PlistParser {
       case 'date':
         return DateTime.parse(elem.text);
       case 'data':
-        return String.fromCharCodes(
-            base64.decode(elem.text.replaceAll(_whitespaceReg, '')));
+        return base64.decode(elem.text.replaceAll(_whitespaceReg, ''));
       case 'array':
         return elem.children
             .where(_isElement)
