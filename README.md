@@ -16,6 +16,15 @@ dependencies:
   plist_parser: "^0.0.7"
 ```
 
+## 📋 Requirements
+
+Dart SDK
+
+```
+environment:
+  sdk: ">=2.16.0 <3.0.0"
+```
+
 ## 🐕 Usage
 
 ```dart
