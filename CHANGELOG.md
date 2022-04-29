@@ -1,3 +1,8 @@
+## 0.0.8
+
+- Fix: Updated XML dependency version.
+- Fix: Updated Dart SDK minimum version to 2.16.0
+
 ## 0.0.7
 
 - Add: Added lints dependency.
