@@ -163,43 +163,37 @@ class PlistParser {
 
   /// Return an Map object for the given the path of Binary plist format bytes.
   Map parseBinaryBytes(Uint8List dataBytes) {
-    var trailerStartPos = dataBytes.length - 32;
+    // Only bplist00 format is supported
+    if (String.fromCharCodes(dataBytes.getRange(0, 8)) != "bplist00") {
+      throw UnimplementedError("Invalid binary plist format");
+    }
+
+    final trailerBytes = dataBytes.buffer.asByteData(dataBytes.length - 32);
 
     // offset table offset size
-    var offsetTableOffsetPos = trailerStartPos + 6;
-    var offsetTableOffsetSize = _bytesToInt(
-        dataBytes.getRange(offsetTableOffsetPos, offsetTableOffsetPos + 1), 1);
+    var offsetTableOffsetSize = trailerBytes.getUint8(6);
 
     // object ref size
-    var objectRefSizePos = trailerStartPos + 7;
-    var objectRefSize = _bytesToInt(
-        dataBytes.getRange(objectRefSizePos, objectRefSizePos + 1), 1);
+    var objectRefSize = trailerBytes.getUint8(7);
 
     // offset table start ref
-    var offsetTableStartPos = _bytesToInt(
-        dataBytes.getRange(
-            dataBytes.length - offsetTableOffsetSize, dataBytes.length),
-        offsetTableOffsetSize);
+    var offsetTableStartPos = trailerBytes.getUint64(24);
 
     // offsetTableStartPos
-    var startPos = _bytesToInt(
-        dataBytes.getRange(
-            offsetTableStartPos, offsetTableStartPos + offsetTableOffsetSize),
-        offsetTableOffsetSize);
+    var startPos = trailerBytes.getUint64(16);
 
     var binaryData = _BinaryData(
         bytes: dataBytes,
         offsetTableOffsetSize: offsetTableOffsetSize,
         offsetTableStartPos: offsetTableStartPos,
-        startPos: startPos,
         objectRefSize: objectRefSize);
 
-    return _handleBinary(binaryData, startPos);
+    return _handleBinary(binaryData, _getObjectStartPos(binaryData, startPos));
   }
 
   bool _isElement(XmlNode node) => node.nodeType == XmlNodeType.ELEMENT;
 
-  _handleElem(XmlElement elem) {
+  dynamic _handleElem(XmlElement elem) {
     switch (elem.name.local) {
       case 'string':
         return elem.text;
@@ -214,8 +208,7 @@ class PlistParser {
       case 'date':
         return DateTime.parse(elem.text);
       case 'data':
-        return String.fromCharCodes(
-            base64.decode(elem.text.replaceAll(_whitespaceReg, '')));
+        return base64.decode(elem.text.replaceAll(_whitespaceReg, ''));
       case 'array':
         return elem.children
             .where(_isElement)
@@ -241,7 +234,7 @@ class PlistParser {
     return Map.fromIterables(keys, values);
   }
 
-  _handleBinary(_BinaryData binary, int pos) {
+  dynamic _handleBinary(_BinaryData binary, int pos) {
     var byte = binary.bytes[pos];
     switch (byte & 0xF0) {
       // bool
@@ -257,45 +250,59 @@ class PlistParser {
       case 0x10:
         var length = 1 << (byte & 0xf);
         pos++;
-        return _bytesToInt(binary.bytes.getRange(pos, pos + length), length);
+        // Signed integers are always stored with 8 bytes
+        return _bytesToInt(binary.bytes.buffer.asByteData(pos, length), length,
+            signed64Bit: true);
 
       // real
       case 0x20:
         var length = 1 << (byte & 0xf);
         pos++;
         return _bytesToDouble(
-            binary.bytes.getRange(pos, pos + length).toList(), length);
+            binary.bytes.buffer.asByteData(pos, length), length);
 
       // date
       case 0x30:
         pos++;
-        var seconds =
-            _bytesToDouble(binary.bytes.getRange(pos, pos + 8).toList(), 8);
+        var seconds = _bytesToDouble(binary.bytes.buffer.asByteData(pos, 8), 8);
         // 8 bytes to apple epoch time
         var date = DateTime(2001).add(Duration(seconds: seconds.toInt()));
         return date.add(date.timeZoneOffset).toUtc();
 
       // data
       case 0x40:
-        return String.fromCharCodes(_getObjectBytes(binary.bytes, byte, pos));
+        final byteData = _getObjectDataBytes(binary.bytes, byte, pos);
+        return binary.bytes.buffer
+            .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes);
 
       // string
       case 0x50:
-        return String.fromCharCodes(_getObjectBytes(binary.bytes, byte, pos));
+        final byteData = _getObjectDataBytes(binary.bytes, byte, pos);
+        return String.fromCharCodes(binary.bytes.buffer
+            .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
 
       // unicode
       case 0x60:
-        return String.fromCharCodes(
-            _getObjectBytes(binary.bytes, byte, pos, unitByte: 2));
+        final byteData =
+            _getObjectDataBytes(binary.bytes, byte, pos, unitByte: 2);
+        final stringBuilder = StringBuffer();
+
+        // UTF16-be decode
+        for (var i = 0; i < byteData.lengthInBytes; i += 2) {
+          stringBuilder.writeCharCode(byteData.getUint16(i));
+        }
+
+        return stringBuilder.toString();
 
       // array
       case 0xA0:
         List<Object> list = [];
-        var itemOffsetList = _getObjectBytes(binary.bytes, byte, pos,
-                unitByte: binary.objectRefSize)
-            .toList();
-        for (var i = 0; i < itemOffsetList.length; i++) {
-          var itemPos = _getObjectStartPos(binary, itemOffsetList[i]);
+        final byteData = _getObjectDataBytes(binary.bytes, byte, pos,
+            unitByte: binary.objectRefSize);
+
+        for (var i = 0; i < byteData.lengthInBytes; i += binary.objectRefSize) {
+          var itemPos = _getObjectStartPos(
+              binary, _bytesToInt(byteData, binary.objectRefSize, offset: i));
           var itemValue = _handleBinary(binary, itemPos);
           list.add(itemValue);
         }
@@ -303,20 +310,23 @@ class PlistParser {
 
       // dictionary
       case 0xD0:
-        var unitByte = binary.objectRefSize;
-        var dictOffsetList = _getObjectBytes(binary.bytes, byte, pos,
-                unitByte: unitByte, sizeScale: 2)
-            .toList();
+        final byteData = _getObjectDataBytes(binary.bytes, byte, pos,
+            unitByte: binary.objectRefSize, sizeScale: 2);
 
         var map = {};
-        var keySize = dictOffsetList.length ~/ 2;
+        var keySize = byteData.lengthInBytes ~/ (2 * binary.objectRefSize);
         for (var i = 0; i < keySize; i++) {
           // key
-          var keyPos = _getObjectStartPos(binary, dictOffsetList[i]);
+          var keyPos = _getObjectStartPos(
+              binary,
+              _bytesToInt(byteData, binary.objectRefSize,
+                  offset: i * binary.objectRefSize));
           var keyName = _handleBinary(binary, keyPos);
 
-          var valuePos =
-              _getObjectStartPos(binary, dictOffsetList[i + keySize]);
+          var valuePos = _getObjectStartPos(
+              binary,
+              _bytesToInt(byteData, binary.objectRefSize,
+                  offset: (i + keySize) * binary.objectRefSize));
           var value = _handleBinary(binary, valuePos);
 
           map[keyName] = value;
@@ -327,42 +337,41 @@ class PlistParser {
   }
 
   @visibleForTesting
-  int bytesToInt(Iterable<int> bytes, int byteSize) =>
-      _bytesToInt(bytes, byteSize);
+  int bytesToInt(ByteData bytes, int byteSize, {int offset = 0}) =>
+      _bytesToInt(bytes, byteSize, offset: offset);
 
-  int _bytesToInt(Iterable<int> bytes, int byteSize) {
-    if (bytes.isEmpty) {
-      throw Exception("bytes list is empty");
-    } else if (bytes.length == 1) {
-      return bytes.first;
+  int _bytesToInt(ByteData byteData, int byteSize,
+      {int offset = 0, bool signed64Bit = false}) {
+    if (byteData.lengthInBytes < byteSize) {
+      throw Exception("bytes list size is invalid");
     }
-
-    var byteData = ByteData.view(Uint8List.fromList(bytes.toList()).buffer);
 
     switch (byteSize) {
       case 1:
-        return byteData.getInt8(0);
+        return byteData.getUint8(offset);
       case 2:
-        return byteData.getInt16(0);
+        return byteData.getUint16(offset);
       case 4:
-        return byteData.getInt32(0);
+        return byteData.getUint32(offset);
       case 8:
-        return byteData.getInt64(0);
+        if (signed64Bit) {
+          return byteData.getInt64(offset);
+        } else {
+          return byteData.getUint64(offset);
+        }
       default:
         throw Exception("Undefined ByteSize: $byteSize");
     }
   }
 
   @visibleForTesting
-  double bytesToDouble(List<int> bytes, int byteSize) =>
+  double bytesToDouble(ByteData bytes, int byteSize) =>
       _bytesToDouble(bytes, byteSize);
 
-  double _bytesToDouble(List<int> bytes, int byteSize) {
-    if (bytes.isEmpty) {
+  double _bytesToDouble(ByteData byteData, int byteSize) {
+    if (byteData.lengthInBytes == 0) {
       throw Exception("bytes list is empty");
     }
-
-    var byteData = ByteData.view(Uint8List.fromList(bytes).buffer);
 
     switch (byteSize) {
       case 4:
@@ -374,12 +383,7 @@ class PlistParser {
     }
   }
 
-  @visibleForTesting
-  Iterable<int> getObjectBytes(List<int> bytes, int byte, int pos,
-          {int unitByte = 1, int sizeScale = 1}) =>
-      _getObjectBytes(bytes, byte, pos, unitByte: unitByte);
-
-  Iterable<int> _getObjectBytes(List<int> bytes, int byte, int pos,
+  ByteData _getObjectDataBytes(Uint8List bytes, int byte, int pos,
       {int unitByte = 1, int sizeScale = 1}) {
     var length = byte & 0xF;
     if (length == 0xF) {
@@ -388,7 +392,7 @@ class PlistParser {
       var num = bytes[pos] & 0xF;
       var size = pow(2, num).toInt();
       pos++;
-      length = _bytesToInt(bytes.getRange(pos, pos + size), size) *
+      length = _bytesToInt(bytes.buffer.asByteData(pos, size), size) *
           unitByte *
           sizeScale;
       pos += size;
@@ -397,34 +401,15 @@ class PlistParser {
       pos++;
     }
 
-    // convert values
-    var resultBytes = bytes.getRange(pos, pos + length);
-    switch (unitByte) {
-      case 1:
-        break;
-      case 2:
-        List<int> newResultBytes = [];
-        for (var i = 0; i < resultBytes.length; i++) {
-          newResultBytes.add(
-              (resultBytes.elementAt(i) << 8) + resultBytes.elementAt(i + 1));
-          i++;
-        }
-        resultBytes = newResultBytes;
-        break;
-      default:
-        throw Exception("Undefined unitByte: $unitByte");
-    }
-
-    return resultBytes;
+    return bytes.buffer.asByteData(pos, length);
   }
 
-  _getObjectStartPos(_BinaryData binary, int offset) {
+  int _getObjectStartPos(_BinaryData binary, int offset) {
     var keyRefPos =
         (binary.offsetTableStartPos) + (binary.offsetTableOffsetSize * offset);
 
     return _bytesToInt(
-        binary.bytes
-            .getRange(keyRefPos, keyRefPos + binary.offsetTableOffsetSize),
+        binary.bytes.buffer.asByteData(keyRefPos, binary.offsetTableOffsetSize),
         binary.offsetTableOffsetSize);
   }
 }
@@ -433,14 +418,12 @@ class _BinaryData {
   Uint8List bytes = Uint8List(0);
   int offsetTableStartPos = 0;
   int offsetTableOffsetSize = 0;
-  int startPos = 0;
   int objectRefSize = 0;
 
   _BinaryData({
     required this.bytes,
     required this.offsetTableStartPos,
     required this.offsetTableOffsetSize,
-    required this.startPos,
     required this.objectRefSize,
   });
 }
