@@ -87,17 +87,18 @@ class PlistParser {
     });
   }
 
-  // ignore: constant_identifier_names
-  static const _BPLIST = "bplist";
+  static final _whitespaceReg = RegExp(r'\s+');
+
+  static const _bplist = "bplist";
 
   /// check if text is binary
   isBinaryTypeText(String text) {
-    return text.substring(0, 6) == _BPLIST;
+    return text.substring(0, 6) == _bplist;
   }
 
   /// check if dataBytes is binary
   isBinaryTypeBytes(Uint8List dataBytes) {
-    return String.fromCharCodes(dataBytes.getRange(0, 6)) == _BPLIST;
+    return String.fromCharCodes(dataBytes.getRange(0, 6)) == _bplist;
   }
 
   /// Return an Map object for the given the path of XML plist format string.
@@ -207,7 +208,8 @@ class PlistParser {
       case 'date':
         return DateTime.parse(elem.text);
       case 'data':
-        return base64.decode(elem.text);
+        return String.fromCharCodes(
+            base64.decode(elem.text.replaceAll(_whitespaceReg, '')));
       case 'array':
         return elem.children
             .where(_isElement)
