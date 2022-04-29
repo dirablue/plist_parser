@@ -13,7 +13,16 @@ This was inspired by some libraries. please see below details.
 
 ```yaml
 dependencies:
-  plist_parser: "^0.0.7"
+  plist_parser: "^0.0.8"
+```
+
+## 📋 Requirements
+
+Dart SDK
+
+```
+environment:
+  sdk: ">=2.16.0 <3.0.0"
 ```
 
 ## 🐕 Usage
