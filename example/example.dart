@@ -53,12 +53,12 @@ void main() async {
   // parse from xml file
   // you can use "parseFile" or "parseFileSync"
   var result2 = PlistParser()
-      .parseFileSync("${Directory.current.path}/example/example.plist");
+      .parseFileSync("${Directory.current.path}/example/plist_xml.plist");
   print(result2);
 
   // parse from binary file
   // it detects binary format automatically
   var result3 = PlistParser()
-      .parseFileSync("${Directory.current.path}/example/example_binary.plist");
+      .parseFileSync("${Directory.current.path}/example/plist_binary.plist");
   print(result3);
 }

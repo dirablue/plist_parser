@@ -79,14 +79,14 @@ void main() async {
   // Parse from xml file.
   //
   // You can use "parseFile"(for Async) or "parseFileSync".
-  var result2 = PlistParser().parseFileSync("${Directory.current.path}/example/example.plist");
+  var result2 = PlistParser().parseFileSync("${Directory.current.path}/example/plist_xml.plist");
   print(result2);
 
   // Parse from binary file.
   //
   // It detects binary format and use binary parser automatically.
   var result3 = PlistParser().parseFileSync(
-      "${Directory.current.path}/example/example_binary.plist");
+      "${Directory.current.path}/example/plist_binary.plist");
   print(result3);
 }
 ```

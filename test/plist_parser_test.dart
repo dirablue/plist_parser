@@ -16,6 +16,12 @@ void main() {
       <string>hello plist</string>
       <key>int_type</key>
       <integer>12345</integer>
+      <key>int_short</key>
+      <integer>253</integer>
+      <key>int_16bit</key>
+      <integer>42767</integer>
+      <key>int_negative</key>
+      <integer>-2354</integer>
       <key>double_type</key>
       <real>12.345</real>
       <key>bool_type_true</key>
@@ -83,8 +89,7 @@ void main() {
         expect(map["date_type"], DateTime.parse("2022-02-11T18:27:45Z"));
 
         // decode base64 string
-        expect(map["data_type"],
-            String.fromCharCodes(base64.decode("VGVzdCBWYWx1ZQ==")));
+        expect(map["data_type"], base64.decode("VGVzdCBWYWx1ZQ=="));
 
         // dictionary
         {
@@ -194,7 +199,7 @@ void main() {
       test('parseFileSync: xml', () {
         var expected = PlistParser().parse(xml);
 
-        var filePath = "${Directory.current.path}/test/test.plist";
+        var filePath = "${Directory.current.path}/test/test_xml.plist";
 
         var map = PlistParser().parseFileSync(filePath);
         expect(map, expected);
@@ -235,7 +240,7 @@ void main() {
       test('parseFile: xml', () async {
         var expected = PlistParser().parse(xml);
 
-        var filePath = "${Directory.current.path}/test/test.plist";
+        var filePath = "${Directory.current.path}/test/test_xml.plist";
 
         var map = await PlistParser().parseFile(filePath);
         expect(map, expected);
@@ -306,7 +311,7 @@ void main() {
     test('parseXmlFileSync', () {
       var expected = PlistParser().parse(xml);
 
-      var filePath = "${Directory.current.path}/test/test.plist";
+      var filePath = "${Directory.current.path}/test/test_xml.plist";
       expect(PlistParser().parseXmlFileSync(filePath), expected);
 
       // no xml elements
@@ -317,7 +322,7 @@ void main() {
     test('parseXmlFile', () async {
       var expected = PlistParser().parse(xml);
 
-      var filePath = "${Directory.current.path}/test/test.plist";
+      var filePath = "${Directory.current.path}/test/test_xml.plist";
       expect(await PlistParser().parseXmlFile(filePath), expected);
 
       // no xml elements
@@ -357,15 +362,33 @@ void main() {
     test('bytesToInt', () async {
       var list = [1, 2, 3, 4];
       var expected = ByteData.view(Uint8List.fromList(list).buffer).getInt8(0);
-      expect(PlistParser().bytesToInt(list, 1), expected);
+      expect(
+          PlistParser()
+              .bytesToInt(ByteData.view(Uint8List.fromList(list).buffer), 1),
+          expected);
 
       list = [1, 2, 3, 4, 5, 6, 7, 8];
       expected = ByteData.view(Uint8List.fromList(list).buffer).getInt16(0);
-      expect(PlistParser().bytesToInt(list, 2), expected);
+      expect(
+          PlistParser()
+              .bytesToInt(ByteData.view(Uint8List.fromList(list).buffer), 2),
+          expected);
+
+      list = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+      expected =
+          ByteData.view(Uint8List.fromList(list.sublist(1)).buffer).getInt16(0);
+      expect(
+          PlistParser().bytesToInt(
+              ByteData.view(Uint8List.fromList(list).buffer), 2,
+              offset: 1),
+          expected);
 
       list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
       expected = ByteData.view(Uint8List.fromList(list).buffer).getInt32(0);
-      expect(PlistParser().bytesToInt(list, 4), expected);
+      expect(
+          PlistParser()
+              .bytesToInt(ByteData.view(Uint8List.fromList(list).buffer), 4),
+          expected);
 
       list = [
         1, 2, 3, 4, //
@@ -378,17 +401,29 @@ void main() {
         13, 14, 15, 16, //
       ];
       expected = ByteData.view(Uint8List.fromList(list).buffer).getInt64(0);
-      expect(PlistParser().bytesToInt(list, 8), expected);
+      expect(
+          PlistParser()
+              .bytesToInt(ByteData.view(Uint8List.fromList(list).buffer), 8),
+          expected);
 
       // if list is empty, it will be an error
       list = [];
-      expect(
-          () => PlistParser().bytesToInt(list, 1), throwsA(isA<Exception>()));
+      expect(() => PlistParser().bytesToInt(ByteData(0), 1),
+          throwsA(isA<Exception>()));
 
       // if specified bytes is undefined, it will be an error
       list = [1, 2, 3, 4];
       expect(
-          () => PlistParser().bytesToInt(list, 7), throwsA(isA<Exception>()));
+          () => PlistParser()
+              .bytesToInt(ByteData.view(Uint8List.fromList(list).buffer), 7),
+          throwsA(isA<Exception>()));
+
+      // if specified size is not ^2, it will be an error
+      list = [1, 2, 3, 4];
+      expect(
+          () => PlistParser()
+              .bytesToInt(ByteData.view(Uint8List.fromList(list).buffer), 3),
+          throwsA(isA<Exception>()));
     });
 
     test('bytesToDouble', () async {
@@ -400,7 +435,10 @@ void main() {
       ];
       var expected =
           ByteData.view(Uint8List.fromList(list).buffer).getFloat32(0);
-      expect(PlistParser().bytesToDouble(list, 4), expected);
+      expect(
+          PlistParser()
+              .bytesToDouble(ByteData.view(Uint8List.fromList(list).buffer), 4),
+          expected);
 
       list = [
         1, 2, 3, 4, 5, 6, 7, 8, //
@@ -414,16 +452,21 @@ void main() {
         1, 2, 3, 4, 5, 6, 7, 8, //
       ];
       expected = ByteData.view(Uint8List.fromList(list).buffer).getFloat64(0);
-      expect(PlistParser().bytesToDouble(list, 8), expected);
+      expect(
+          PlistParser()
+              .bytesToDouble(ByteData.view(Uint8List.fromList(list).buffer), 8),
+          expected);
 
       // if list is empty, it will be an error
       list = [];
-      expect(() => PlistParser().bytesToDouble(list, 4),
+      expect(() => PlistParser().bytesToDouble(ByteData(0), 4),
           throwsA(isA<Exception>()));
 
       // if specified bytes is undefined, it will be an error
       list = [1];
-      expect(() => PlistParser().bytesToDouble(list, 1),
+      expect(
+          () => PlistParser()
+              .bytesToDouble(ByteData.view(Uint8List.fromList(list).buffer), 1),
           throwsA(isA<Exception>()));
     });
 
@@ -446,7 +489,8 @@ void main() {
       });
 
       test('binary file', () async {
-        var fileName = "${Directory.current.path}/test/test_unicode.plist";
+        var fileName =
+            "${Directory.current.path}/test/test_unicode_binary.plist";
         var map = PlistParser().parseFileSync(fileName);
 
         var expected = copyright;
@@ -462,11 +506,11 @@ void main() {
           matcherContainsString("test12345"));
     });
 
-    test('getObjectBytes', () {
-      // invalid unitByte value
+    test('InvalidBinaryPlistFormat', () {
       expect(
-          () => PlistParser().getObjectBytes([1, 2, 3, 4], 1, 0, unitByte: 3),
-          throwsA(isA<Exception>()));
+          () => PlistParser()
+              .parseBinaryBytes(ascii.encoder.convert("bplist15000")),
+          throwsA(isA<UnimplementedError>()));
     });
   });
 }
