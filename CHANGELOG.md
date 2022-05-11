@@ -1,3 +1,14 @@
+## 0.0.9
+
+- Fix: Allow whitespaces in value of data type.
+- Fix: Allow only bplist00 in binary type.
+- Fix: Fixed the issue of integer decoding of binary plist.
+- Improve: Optimize binary plist decode.
+
+[Breaking Changes]:
+
+- Fix: Return binary value of data type as Uint8List rather than as a invalid string.
+
 ## 0.0.8
 
 - Fix: Updated XML dependency version.
@@ -10,11 +21,11 @@
 
 ## 0.0.6
 
-- Fix: fixed the parsing issue of binary parser.
+- Fix: Fixed the parsing issue of binary parser.
 
 ## 0.0.5
 
-- Fix: fixed to support unicode data format.
+- Fix: Fixed to support unicode data format.
 
 ## 0.0.4
 
