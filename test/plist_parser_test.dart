@@ -188,6 +188,13 @@ void main() {
                 typeDetection: false),
             throwsA(isA<XmlParserException>()));
       });
+
+      test('parse: binary file2', () {
+        // root element is array
+        var path = "${Directory.current.path}/test/test_binary2.plist";
+        var map = PlistParser().parseFileSync(path);
+        expect(map[0]["location"], "Les Cinq Terres, Italie");
+      });
     });
 
     group('parseBytes', () {
