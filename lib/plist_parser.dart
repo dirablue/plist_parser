@@ -113,8 +113,13 @@ class PlistParser {
     if (elements.isEmpty) {
       throw NotFoundException('Not found plist elements');
     }
-
-    return _handleDict(elements.first);
+    if (elements.first.localName == 'array') {
+      // array
+      return _handleArray(elements.first).asMap();
+    } else {
+      // dictionary
+      return _handleDict(elements.first);
+    }
   }
 
   /// Synchronously return an Map object for the given the path of
@@ -188,7 +193,13 @@ class PlistParser {
         offsetTableStartPos: offsetTableStartPos,
         objectRefSize: objectRefSize);
 
-    return _handleBinary(binaryData, _getObjectStartPos(binaryData, startPos));
+    var result =
+        _handleBinary(binaryData, _getObjectStartPos(binaryData, startPos));
+    if (result is List) {
+      return result.asMap();
+    } else {
+      return result;
+    }
   }
 
   bool _isElement(XmlNode node) => node.nodeType == XmlNodeType.ELEMENT;
@@ -210,16 +221,20 @@ class PlistParser {
       case 'data':
         return base64.decode(elem.text.replaceAll(_whitespaceReg, ''));
       case 'array':
-        return elem.children
-            .where(_isElement)
-            .cast<XmlElement>()
-            .map((el) => _handleElem(el))
-            .toList();
+        return _handleArray(elem);
       case 'dict':
         return _handleDict(elem);
       default:
         return null;
     }
+  }
+
+  List _handleArray(XmlElement elem) {
+    return elem.children
+        .where(_isElement)
+        .cast<XmlElement>()
+        .map((el) => _handleElem(el))
+        .toList();
   }
 
   Map _handleDict(XmlElement elem) {

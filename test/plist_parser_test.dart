@@ -65,6 +65,28 @@ void main() {
     </plist>
   ''';
 
+  // root element is array
+  const xml2 = '''
+  <?xml version="1.0" encoding="UTF-8"?>
+  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+  <plist version="1.0">
+  <array>
+    <dict>
+      <key>string_type</key>
+      <string>how are you? plist</string>
+      <key>int_type</key>
+      <integer>23456</integer>
+    </dict>
+    <dict>
+      <key>string_type</key>
+      <string>see you again!</string>
+      <key>int_type</key>
+      <integer>34567</integer>
+    </dict>
+  </array>
+  </plist>
+  ''';
+
   const unicodeXml = '''
   <?xml version="1.0" encoding="UTF-8"?>
   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -133,6 +155,16 @@ void main() {
         // if false, use xml parser
         var map3 = PlistParser().parse(xml, typeDetection: false);
         expect(map3, expected, reason: "typeDetection: false");
+      });
+
+      test('parse: xml2 text', () {
+        // root element is array
+        var map = PlistParser().parse(xml2);
+        expect(map[0]["string_type"], "how are you? plist");
+        expect(map[0]["int_type"], 23456);
+
+        expect(map[1]["string_type"], "see you again!");
+        expect(map[1]["int_type"], 34567);
       });
 
       test('parse: binary file', () {
