@@ -1,3 +1,6 @@
+## 0.0.10
+- Fix: Support array as root element.
+
 ## 0.0.9
 
 - Fix: Allow whitespaces in value of data type.
