@@ -240,8 +240,9 @@ class PlistParser {
   Map _handleDict(XmlElement elem) {
     final children = elem.children.where(_isElement).cast<XmlElement>();
 
-    final keys =
-        children.where((el) => el.name.local == 'key').map((el) => el.innerText);
+    final keys = children
+        .where((el) => el.name.local == 'key')
+        .map((el) => el.innerText);
 
     final values = children
         .where((el) => el.name.local != 'key')
