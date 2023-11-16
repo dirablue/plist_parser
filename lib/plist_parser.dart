@@ -207,19 +207,19 @@ class PlistParser {
   dynamic _handleElem(XmlElement elem) {
     switch (elem.name.local) {
       case 'string':
-        return elem.text;
+        return elem.innerText;
       case 'real':
-        return double.parse(elem.text);
+        return double.parse(elem.innerText);
       case 'integer':
-        return int.parse(elem.text);
+        return int.parse(elem.innerText);
       case 'true':
         return true;
       case 'false':
         return false;
       case 'date':
-        return DateTime.parse(elem.text);
+        return DateTime.parse(elem.innerText);
       case 'data':
-        return base64.decode(elem.text.replaceAll(_whitespaceReg, ''));
+        return base64.decode(elem.innerText.replaceAll(_whitespaceReg, ''));
       case 'array':
         return _handleArray(elem);
       case 'dict':
@@ -238,12 +238,13 @@ class PlistParser {
   }
 
   Map _handleDict(XmlElement elem) {
-    var children = elem.children.where(_isElement).cast<XmlElement>();
+    final children = elem.children.where(_isElement).cast<XmlElement>();
 
-    var keys =
-        children.where((el) => el.name.local == 'key').map((el) => el.text);
+    final keys = children
+        .where((el) => el.name.local == 'key')
+        .map((el) => el.innerText);
 
-    var values = children
+    final values = children
         .where((el) => el.name.local != 'key')
         .map((el) => _handleElem(el));
     return Map.fromIterables(keys, values);
