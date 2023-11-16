@@ -1,3 +1,6 @@
+## 0.0.11
+- Fix: Pub.dev static analysis issues fixed.
+
 ## 0.0.10
 - Fix: Support array as root element.
 
