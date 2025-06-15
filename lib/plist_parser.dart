@@ -1,5 +1,3 @@
-library plist_parser;
-
 import 'dart:convert' show utf8, base64;
 import 'dart:io';
 import 'dart:math';
