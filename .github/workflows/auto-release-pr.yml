@@ -157,32 +157,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update version in pubspec.yaml
-        if: steps.check-changes.outputs.has_changes == 'true' && steps.check-pr.outputs.pr_exists == 'false'
-        run: |
-          NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
-          sed -i'' -e "s/^version:.*/version: $NEW_VERSION/" pubspec.yaml
-          
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          git add pubspec.yaml
-          git commit -m "chore: bump version to $NEW_VERSION"
-          git push origin develop
-
-      - name: Update README.md version
-        if: steps.check-changes.outputs.has_changes == 'true' && steps.check-pr.outputs.pr_exists == 'false'
-        run: |
-          NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
-          # Update version in README.md dependencies section
-          sed -i'' -e "s/plist_parser: \".*\"/plist_parser: \"^$NEW_VERSION\"/" README.md
-          
-          git add README.md
-          git commit -m "docs: update README version to $NEW_VERSION"
-          git push origin develop
-
-      - name: Update CHANGELOG.md
-        if: steps.check-changes.outputs.has_changes == 'true' && steps.check-pr.outputs.pr_exists == 'false'
+      - name: Update version files (pubspec.yaml, README.md, CHANGELOG.md)
+        if: steps.check-changes.outputs.has_changes == 'true'
         run: |
           NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
           VERSION_TYPE="${{ steps.next-version.outputs.version_type }}"
@@ -194,9 +170,20 @@ jobs:
             COMMIT_RANGE="${LATEST_TAG}..origin/develop"
           fi
           
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 1. Update pubspec.yaml version
+          sed -i'' -e "s/^version:.*/version: $NEW_VERSION/" pubspec.yaml
+          echo "Updated pubspec.yaml to version $NEW_VERSION"
+          
+          # 2. Update README.md version
+          sed -i'' -e "s/plist_parser: \".*\"/plist_parser: \"^$NEW_VERSION\"/" README.md
+          echo "Updated README.md to version ^$NEW_VERSION"
+          
+          # 3. Update CHANGELOG.md
           # Create temporary changelog entry
           echo "## $NEW_VERSION" > changelog_entry.md
-          echo "" >> changelog_entry.md
           
           # Add features
           FEATURES=$(git log $COMMIT_RANGE --pretty=format:"- %s" --grep="feat:" --grep="feature:" 2>/dev/null | head -10)
@@ -222,26 +209,65 @@ jobs:
             echo "" >> changelog_entry.md
           fi
           
-          # Add other changes if no specific categories found
-          if [ -z "$FEATURES" ] && [ -z "$FIXES" ] && [ -z "$BREAKING" ]; then
-            OTHER_CHANGES=$(git log $COMMIT_RANGE --pretty=format:"- %s" 2>/dev/null | head -5)
-            if [ -n "$OTHER_CHANGES" ]; then
-              echo "$OTHER_CHANGES" >> changelog_entry.md
+          # Add other significant changes
+          OTHER_CHANGES=$(git log $COMMIT_RANGE --pretty=format:"- %s" --grep="chore:" --grep="docs:" --grep="security:" 2>/dev/null | head -5)
+          if [ -n "$OTHER_CHANGES" ]; then
+            echo "### Other Changes" >> changelog_entry.md
+            echo "$OTHER_CHANGES" >> changelog_entry.md
+            echo "" >> changelog_entry.md
+          fi
+          
+          # If no categorized changes found, add recent commits
+          if [ -z "$FEATURES" ] && [ -z "$FIXES" ] && [ -z "$BREAKING" ] && [ -z "$OTHER_CHANGES" ]; then
+            RECENT_CHANGES=$(git log $COMMIT_RANGE --pretty=format:"- %s" 2>/dev/null | head -5)
+            if [ -n "$RECENT_CHANGES" ]; then
+              echo "$RECENT_CHANGES" >> changelog_entry.md
               echo "" >> changelog_entry.md
             fi
           fi
           
-          # Prepend to existing CHANGELOG.md
-          if [ -f CHANGELOG.md ]; then
-            cat CHANGELOG.md >> changelog_entry.md
-            mv changelog_entry.md CHANGELOG.md
+          # Check if CHANGELOG.md already has this version
+          if grep -q "^## $NEW_VERSION" CHANGELOG.md 2>/dev/null; then
+            # Replace existing entry
+            sed -i'' "/^## $NEW_VERSION/,/^## /{ /^## $NEW_VERSION/!{ /^## /!d; }; }" CHANGELOG.md
+            temp_file=$(mktemp)
+            awk -v new_version="$NEW_VERSION" '
+              /^## / && $0 !~ new_version && !found_first {
+                if (!inserted) {
+                  while (getline line < "changelog_entry.md") print line
+                  close("changelog_entry.md")
+                  inserted = 1
+                }
+              }
+              { print }
+            ' CHANGELOG.md > "$temp_file"
+            mv "$temp_file" CHANGELOG.md
           else
-            mv changelog_entry.md CHANGELOG.md
+            # Prepend to existing CHANGELOG.md
+            if [ -f CHANGELOG.md ]; then
+              cat CHANGELOG.md >> changelog_entry.md
+              mv changelog_entry.md CHANGELOG.md
+            else
+              mv changelog_entry.md CHANGELOG.md
+            fi
           fi
           
-          git add CHANGELOG.md
-          git commit -m "docs: update CHANGELOG for v$NEW_VERSION"
-          git push origin develop
+          echo "Updated CHANGELOG.md with version $NEW_VERSION"
+          
+          # Commit all changes together
+          git add pubspec.yaml README.md CHANGELOG.md
+          
+          # Check if there are any changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update version files to $NEW_VERSION" \
+                       -m "Update pubspec.yaml version to $NEW_VERSION" \
+                       -m "Update README.md dependency version to ^$NEW_VERSION" \
+                       -m "Update CHANGELOG.md with release notes for $NEW_VERSION"
+            git push origin develop
+            echo "Successfully updated all version files"
+          fi
 
       - name: Generate changelog
         if: steps.check-changes.outputs.has_changes == 'true' && steps.check-pr.outputs.pr_exists == 'false'
@@ -349,18 +375,52 @@ jobs:
         if: steps.check-changes.outputs.has_changes == 'true' && steps.check-pr.outputs.pr_exists == 'true'
         run: |
           NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
+          VERSION_TYPE="${{ steps.next-version.outputs.version_type }}"
           PR_NUMBER="${{ steps.check-pr.outputs.pr_number }}"
           
           if [ -n "$PR_NUMBER" ] && [ -n "$NEW_VERSION" ]; then
+            # Update PR title
+            gh pr edit $PR_NUMBER --title "🚀 Release v$NEW_VERSION"
+            
+            # Update PR body with latest changelog
+            PR_BODY="## Release v$NEW_VERSION
+            
+            This PR contains changes ready for release to master branch.
+            
+            **Version Type:** $VERSION_TYPE
+            
+            ### What happens when this PR is merged:
+            1. Version will be tagged as v$NEW_VERSION
+            2. Package will be automatically published to pub.dev
+            3. GitHub release will be created with changelog
+            
+            ${{ steps.changelog.outputs.changelog }}
+            
+            ---
+            
+            **Instructions:**
+            - Review the changes above
+            - Merge this PR to trigger the automated release process
+            - The package will be automatically published to pub.dev after merge
+            
+            _This PR was automatically updated by the release workflow._"
+            
+            gh pr edit $PR_NUMBER --body "$PR_BODY"
+            
+            # Add a comment about the update
             gh pr comment $PR_NUMBER \
               --body "🔄 **Release PR Updated**
               
-              New changes have been added to the develop branch since this PR was created.
-              The release is ready with version v$NEW_VERSION.
+              The release PR has been updated with the latest changes from develop branch.
+              - Version updated to: **v$NEW_VERSION**
+              - All version files (pubspec.yaml, README.md, CHANGELOG.md) have been synchronized
+              - PR title and description have been refreshed
               
-              ${{ steps.changelog.outputs.changelog }}" || echo "Failed to update PR comment"
+              The release is ready for review and merge."
+              
+            echo "Successfully updated existing PR #$PR_NUMBER to version $NEW_VERSION"
           else
-            echo "Missing PR_NUMBER or NEW_VERSION, skipping update"
+            echo "Missing PR_NUMBER ($PR_NUMBER) or NEW_VERSION ($NEW_VERSION), skipping update"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
