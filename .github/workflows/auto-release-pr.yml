@@ -6,6 +6,17 @@ on:
   schedule:
     # Run weekly on Sundays at 10:00 JST to create release PR if there are changes
     - cron: "0 1 * * 0"  # 10:00 JST (UTC+9)
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Force specific version type (leave empty for auto-detection)'
+        required: false
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
 
 jobs:
   create-release-pr:
