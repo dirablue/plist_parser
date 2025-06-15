@@ -1,19 +1,13 @@
-name: Auto Release PR
+name: Create Release Version
 
 on:
-  push:
-    branches: [develop]
-  schedule:
-    # Run weekly on Sundays at 10:00 JST to create release PR if there are changes
-    - cron: "0 1 * * 0"  # 10:00 JST (UTC+9)
   workflow_dispatch:
     inputs:
       version_type:
-        description: 'Force specific version type (leave empty for auto-detection)'
-        required: false
+        description: 'Version type for the release'
+        required: true
         type: choice
         options:
-          - auto
           - patch
           - minor
           - major
@@ -24,10 +18,24 @@ permissions:
   issues: write
 
 jobs:
-  create-release-pr:
+  create-release-version:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Check if running on develop branch
+        run: |
+          CURRENT_BRANCH="${{ github.ref_name }}"
+          echo "Current branch: $CURRENT_BRANCH"
+          
+          if [ "$CURRENT_BRANCH" != "develop" ]; then
+            echo "❌ Error: This workflow can only be run on the develop branch"
+            echo "Current branch: $CURRENT_BRANCH"
+            echo "Please switch to the develop branch and try again"
+            exit 1
+          fi
+          
+          echo "✅ Running on develop branch - proceeding with release version creation"
+
       - name: Checkout develop branch
         uses: actions/checkout@v4
         with:
@@ -50,30 +58,45 @@ jobs:
       - name: Run tests
         run: flutter test --coverage
 
-      - name: Check if there are changes since last release
-        id: check-changes
+      - name: Generate coverage report for artifact
         run: |
-          # Get the latest release tag
-          LATEST_TAG=$(git describe --tags --abbrev=0 origin/master 2>/dev/null || echo "")
+          echo "Generating coverage report..."
+          dart pub global activate coverage
+          dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --packages=.dart_tool/package_config.json --report-on=lib
           
-          if [ -z "$LATEST_TAG" ]; then
-            echo "No previous releases found"
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-          else
-            # Check if there are commits between latest tag and develop
-            COMMITS_SINCE_TAG=$(git rev-list ${LATEST_TAG}..origin/develop --count)
-            
-            if [ "$COMMITS_SINCE_TAG" -gt 0 ]; then
-              echo "Found $COMMITS_SINCE_TAG commits since last release"
-              echo "has_changes=true" >> $GITHUB_OUTPUT
-            else
-              echo "No changes since last release"
-              echo "has_changes=false" >> $GITHUB_OUTPUT
-            fi
-          fi
+          # Generate HTML coverage report for easier viewing
+          sudo apt-get update -qq
+          sudo apt-get install -y lcov
+          genhtml coverage/lcov.info -o coverage/html --title "Release Coverage Report"
+          
+          # Display coverage summary
+          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          lcov --summary coverage/lcov.info >> $GITHUB_STEP_SUMMARY 2>&1 || echo "Failed to generate summary" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload coverage report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-coverage-report
+          path: |
+            coverage/lcov.info
+            coverage/html/
+          retention-days: 30
+
+      - name: Reset all uncommitted changes
+        run: |
+          echo "Resetting all uncommitted changes after test coverage..."
+          # Reset all tracked files to HEAD
+          git reset --hard HEAD
+          # Remove all untracked files and directories
+          git clean -fd
+          # Show status for verification
+          echo "Git status after cleanup:"
+          git status
 
       - name: Determine next version
-        if: steps.check-changes.outputs.has_changes == 'true'
         id: next-version
         run: |
           # Get current version from pubspec.yaml
@@ -88,32 +111,8 @@ jobs:
           
           echo "Parsed version: MAJOR=$MAJOR, MINOR=$MINOR, PATCH=$PATCH"
           
-          # Get commit messages since last release to determine version bump type
-          LATEST_TAG=$(git describe --tags --abbrev=0 origin/master 2>/dev/null || echo "")
-          
-          if [ -z "$LATEST_TAG" ]; then
-            COMMIT_RANGE="origin/develop"
-          else
-            COMMIT_RANGE="${LATEST_TAG}..origin/develop"
-          fi
-          
-          COMMIT_MESSAGES=$(git log $COMMIT_RANGE --pretty=format:"%s" 2>/dev/null || echo "")
-          
-          # Determine version type based on manual input or commit messages
-          if [ -n "${{ github.event.inputs.version_type }}" ] && [ "${{ github.event.inputs.version_type }}" != "auto" ]; then
-            VERSION_TYPE="${{ github.event.inputs.version_type }}"
-          else
-            # Check for breaking changes or major updates
-            if echo "$COMMIT_MESSAGES" | grep -qE "(BREAKING CHANGE|breaking change|major:)"; then
-              VERSION_TYPE="major"
-            # Check for features or minor updates
-            elif echo "$COMMIT_MESSAGES" | grep -qE "(feat:|feature:|minor:)"; then
-              VERSION_TYPE="minor"
-            # Default to patch
-            else
-              VERSION_TYPE="patch"
-            fi
-          fi
+          # Get version type from manual input
+          VERSION_TYPE="${{ github.event.inputs.version_type }}"
           
           # Calculate new version
           case $VERSION_TYPE in
@@ -139,26 +138,7 @@ jobs:
           echo "next_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "version_type=$VERSION_TYPE" >> $GITHUB_OUTPUT
 
-      - name: Check if release PR already exists
-        if: steps.check-changes.outputs.has_changes == 'true'
-        id: check-pr
-        run: |
-          # Check if there's already an open PR from develop to master
-          EXISTING_PR=$(gh pr list --base master --head develop --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
-          
-          if [ -n "$EXISTING_PR" ]; then
-            echo "Release PR #$EXISTING_PR already exists"
-            echo "pr_exists=true" >> $GITHUB_OUTPUT
-            echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
-          else
-            echo "No existing release PR found"
-            echo "pr_exists=false" >> $GITHUB_OUTPUT
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Update version files (pubspec.yaml, README.md, CHANGELOG.md)
-        if: steps.check-changes.outputs.has_changes == 'true'
+      - name: Update version files and commit to develop
         run: |
           NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
           VERSION_TYPE="${{ steps.next-version.outputs.version_type }}"
@@ -167,7 +147,7 @@ jobs:
           if [ -z "$LATEST_TAG" ]; then
             COMMIT_RANGE="origin/develop"
           else
-            COMMIT_RANGE="${LATEST_TAG}..origin/develop"
+            COMMIT_RANGE="${LATEST_TAG}..HEAD"
           fi
           
           git config user.name "github-actions[bot]"
@@ -184,6 +164,7 @@ jobs:
           # 3. Update CHANGELOG.md
           # Create temporary changelog entry
           echo "## $NEW_VERSION" > changelog_entry.md
+          echo "" >> changelog_entry.md
           
           # Add features
           FEATURES=$(git log $COMMIT_RANGE --pretty=format:"- %s" --grep="feat:" --grep="feature:" 2>/dev/null | head -10)
@@ -221,101 +202,89 @@ jobs:
           if [ -z "$FEATURES" ] && [ -z "$FIXES" ] && [ -z "$BREAKING" ] && [ -z "$OTHER_CHANGES" ]; then
             RECENT_CHANGES=$(git log $COMMIT_RANGE --pretty=format:"- %s" 2>/dev/null | head -5)
             if [ -n "$RECENT_CHANGES" ]; then
+              echo "### Changes" >> changelog_entry.md
               echo "$RECENT_CHANGES" >> changelog_entry.md
               echo "" >> changelog_entry.md
             fi
           fi
           
-          # Check if CHANGELOG.md already has this version
-          if grep -q "^## $NEW_VERSION" CHANGELOG.md 2>/dev/null; then
-            # Replace existing entry
-            sed -i'' "/^## $NEW_VERSION/,/^## /{ /^## $NEW_VERSION/!{ /^## /!d; }; }" CHANGELOG.md
-            temp_file=$(mktemp)
-            awk -v new_version="$NEW_VERSION" '
-              /^## / && $0 !~ new_version && !found_first {
-                if (!inserted) {
-                  while (getline line < "changelog_entry.md") print line
-                  close("changelog_entry.md")
-                  inserted = 1
-                }
-              }
-              { print }
-            ' CHANGELOG.md > "$temp_file"
-            mv "$temp_file" CHANGELOG.md
+          # Prepend to existing CHANGELOG.md
+          if [ -f CHANGELOG.md ]; then
+            cat CHANGELOG.md >> changelog_entry.md
+            mv changelog_entry.md CHANGELOG.md
           else
-            # Prepend to existing CHANGELOG.md
-            if [ -f CHANGELOG.md ]; then
-              cat CHANGELOG.md >> changelog_entry.md
-              mv changelog_entry.md CHANGELOG.md
-            else
-              mv changelog_entry.md CHANGELOG.md
-            fi
+            mv changelog_entry.md CHANGELOG.md
           fi
           
           echo "Updated CHANGELOG.md with version $NEW_VERSION"
           
           # Commit all changes together
           git add pubspec.yaml README.md CHANGELOG.md
-          
-          # Check if there are any changes to commit
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "chore: update version files to $NEW_VERSION" \
-                       -m "Update pubspec.yaml version to $NEW_VERSION" \
-                       -m "Update README.md dependency version to ^$NEW_VERSION" \
-                       -m "Update CHANGELOG.md with release notes for $NEW_VERSION"
-            git push origin develop
-            echo "Successfully updated all version files"
-          fi
+          git commit -m "chore: bump version to $NEW_VERSION" \
+                     -m "Update pubspec.yaml version to $NEW_VERSION" \
+                     -m "Update README.md dependency version to ^$NEW_VERSION" \
+                     -m "Update CHANGELOG.md with release notes for $NEW_VERSION"
+          git push origin develop
+          echo "Successfully updated all version files and committed to develop"
 
-      - name: Generate changelog
-        if: steps.check-changes.outputs.has_changes == 'true' && steps.check-pr.outputs.pr_exists == 'false'
+      - name: Create or update release branch
+        run: |
+          NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
+          
+          # Check if release branch exists
+          if git show-ref --quiet refs/remotes/origin/release; then
+            echo "Release branch exists, updating it"
+            git checkout release
+            git pull origin release
+            git merge develop --no-ff -m "chore: merge develop into release for v$NEW_VERSION"
+          else
+            echo "Creating new release branch from develop"
+            git checkout -b release
+          fi
+          
+          git push origin release
+          echo "Release branch updated with develop changes"
+
+      - name: Check if release PR already exists
+        id: check-pr
+        run: |
+          # Check if there's already an open PR from release to master
+          EXISTING_PR=$(gh pr list --base master --head release --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+          
+          if [ -n "$EXISTING_PR" ]; then
+            echo "Release PR #$EXISTING_PR already exists"
+            echo "pr_exists=true" >> $GITHUB_OUTPUT
+            echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
+          else
+            echo "No existing release PR found"
+            echo "pr_exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate changelog for PR
+        if: steps.check-pr.outputs.pr_exists == 'false'
         id: changelog
         run: |
           NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
           LATEST_TAG=$(git describe --tags --abbrev=0 origin/master 2>/dev/null || echo "")
           
           if [ -z "$LATEST_TAG" ]; then
-            COMMIT_RANGE="origin/develop"
+            COMMIT_RANGE="origin/release"
           else
-            COMMIT_RANGE="${LATEST_TAG}..origin/develop"
+            COMMIT_RANGE="${LATEST_TAG}..origin/release"
           fi
           
           echo "## Changes in v$NEW_VERSION" > release_notes.md
           echo "" >> release_notes.md
           
-          # Group commits by type with better error handling
-          echo "### Features" >> release_notes.md
-          if git log $COMMIT_RANGE --pretty=format:"- %s" --grep="feat:" --grep="feature:" 2>/dev/null | head -20 >> release_notes.md; then
-            echo "" >> release_notes.md
+          # Extract from CHANGELOG.md if it exists
+          if [ -f CHANGELOG.md ]; then
+            # Extract the section for this version from CHANGELOG.md
+            awk "/^## $NEW_VERSION/,/^## /" CHANGELOG.md | head -n -1 >> release_notes.md
           else
-            echo "- No new features" >> release_notes.md
-            echo "" >> release_notes.md
-          fi
-          
-          echo "### Bug Fixes" >> release_notes.md
-          if git log $COMMIT_RANGE --pretty=format:"- %s" --grep="fix:" --grep="bug:" 2>/dev/null | head -20 >> release_notes.md; then
-            echo "" >> release_notes.md
-          else
-            echo "- No bug fixes" >> release_notes.md
-            echo "" >> release_notes.md
-          fi
-          
-          echo "### Chores" >> release_notes.md
-          if git log $COMMIT_RANGE --pretty=format:"- %s" --grep="chore:" 2>/dev/null | head -20 >> release_notes.md; then
-            echo "" >> release_notes.md
-          else
-            echo "- No maintenance changes" >> release_notes.md
-            echo "" >> release_notes.md
-          fi
-          
-          echo "### Dependencies" >> release_notes.md
-          if git log $COMMIT_RANGE --pretty=format:"- %s" --grep="dependencies" 2>/dev/null | head -20 >> release_notes.md; then
-            echo "" >> release_notes.md
-          else
-            echo "- No dependency updates" >> release_notes.md
-            echo "" >> release_notes.md
+            echo "### Changes" >> release_notes.md
+            git log $COMMIT_RANGE --pretty=format:"- %s" 2>/dev/null | head -20 >> release_notes.md || echo "- Initial release" >> release_notes.md
           fi
           
           # Set output for PR body
@@ -325,8 +294,8 @@ jobs:
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
-      - name: Create release PR
-        if: steps.check-changes.outputs.has_changes == 'true' && steps.check-pr.outputs.pr_exists == 'false'
+      - name: Create release PR from release to master
+        if: steps.check-pr.outputs.pr_exists == 'false'
         run: |
           NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
           VERSION_TYPE="${{ steps.next-version.outputs.version_type }}"
@@ -335,7 +304,7 @@ jobs:
           
           PR_BODY="## Release v$NEW_VERSION
           
-          This PR contains changes ready for release to master branch.
+          This PR contains changes ready for release from the release branch to master.
           
           **Version Type:** $VERSION_TYPE
           
@@ -355,15 +324,15 @@ jobs:
           
           _This PR was automatically created by the release workflow._"
           
-          # Create PR without labels first, then add labels if they exist
+          # Create PR from release to master
           gh pr create \
             --title "$PR_TITLE" \
             --body "$PR_BODY" \
             --base master \
-            --head develop || echo "Failed to create PR"
+            --head release || echo "Failed to create PR"
           
           # Try to add labels (ignore if they don't exist)
-          PR_NUMBER=$(gh pr list --base master --head develop --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+          PR_NUMBER=$(gh pr list --base master --head release --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
           if [ -n "$PR_NUMBER" ]; then
             gh pr edit $PR_NUMBER --add-label "release" 2>/dev/null || echo "Label 'release' not found, skipping"
             gh pr edit $PR_NUMBER --add-label "auto-generated" 2>/dev/null || echo "Label 'auto-generated' not found, skipping"
@@ -372,11 +341,24 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update existing release PR
-        if: steps.check-changes.outputs.has_changes == 'true' && steps.check-pr.outputs.pr_exists == 'true'
+        if: steps.check-pr.outputs.pr_exists == 'true'
         run: |
           NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
           VERSION_TYPE="${{ steps.next-version.outputs.version_type }}"
           PR_NUMBER="${{ steps.check-pr.outputs.pr_number }}"
+          
+          # Generate changelog for update
+          LATEST_TAG=$(git describe --tags --abbrev=0 origin/master 2>/dev/null || echo "")
+          
+          echo "## Changes in v$NEW_VERSION" > release_notes.md
+          echo "" >> release_notes.md
+          
+          if [ -f CHANGELOG.md ]; then
+            awk "/^## $NEW_VERSION/,/^## /" CHANGELOG.md | head -n -1 >> release_notes.md
+          else
+            echo "### Changes" >> release_notes.md
+            echo "- Version bump to $NEW_VERSION" >> release_notes.md
+          fi
           
           if [ -n "$PR_NUMBER" ] && [ -n "$NEW_VERSION" ]; then
             # Update PR title
@@ -385,7 +367,7 @@ jobs:
             # Update PR body with latest changelog
             PR_BODY="## Release v$NEW_VERSION
             
-            This PR contains changes ready for release to master branch.
+            This PR contains changes ready for release from the release branch to master.
             
             **Version Type:** $VERSION_TYPE
             
@@ -394,7 +376,7 @@ jobs:
             2. Package will be automatically published to pub.dev
             3. GitHub release will be created with changelog
             
-            ${{ steps.changelog.outputs.changelog }}
+            $(cat release_notes.md)
             
             ---
             
@@ -411,7 +393,7 @@ jobs:
             gh pr comment $PR_NUMBER \
               --body "🔄 **Release PR Updated**
               
-              The release PR has been updated with the latest changes from develop branch.
+              The release PR has been updated with the latest changes from release branch.
               - Version updated to: **v$NEW_VERSION**
               - All version files (pubspec.yaml, README.md, CHANGELOG.md) have been synchronized
               - PR title and description have been refreshed
@@ -424,3 +406,22 @@ jobs:
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
+          VERSION_TYPE="${{ steps.next-version.outputs.version_type }}"
+          
+          echo "🎉 Release preparation completed!"
+          echo ""
+          echo "📋 Summary:"
+          echo "- Version: $NEW_VERSION ($VERSION_TYPE)"
+          echo "- Files updated: pubspec.yaml, README.md, CHANGELOG.md"
+          echo "- Changes committed to develop branch"
+          echo "- Release branch updated"
+          echo "- Release PR created/updated (release → master)"
+          echo ""
+          echo "🚀 Next steps:"
+          echo "1. Review the created/updated PR"
+          echo "2. Merge the PR to trigger automatic release"
+          echo "3. The package will be published to pub.dev automatically"
