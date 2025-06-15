@@ -26,7 +26,6 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
-      day: "monday"
       time: "09:00"
       timezone: "Asia/Tokyo"
     open-pull-requests-limit: 3
