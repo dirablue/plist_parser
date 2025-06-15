@@ -537,6 +537,6 @@ master → pub.dev公開
    - GitHub Actionsの権限設定を確認
 
 7. **Create Release Versionワークフローが見つからない**
-   - `.github/workflows/auto-release-pr.yml`が存在するか確認
+   - `.github/workflows/create-release-version.yml`が存在するか確認
    - ワークフローファイルの構文エラーを確認
    - mainブランチにワークフローファイルがプッシュされているか確認
