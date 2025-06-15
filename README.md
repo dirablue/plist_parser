@@ -14,7 +14,7 @@ This was inspired by some libraries. please see below details.
 
 ```yaml
 dependencies:
-  plist_parser: "^0.2.3"
+  plist_parser: "^0.2.4"
 ```
 
 ## 📋 Requirements
@@ -23,7 +23,7 @@ Dart SDK
 
 ```
 environment:
-  sdk: ">=2.16.0 <4.0.0"
+  sdk: ">=3.0.0 <4.0.0"
 ```
 
 ## 🐕 Usage

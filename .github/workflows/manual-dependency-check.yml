@@ -98,7 +98,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.3'
+          flutter-version: '3.27.1'
           channel: 'stable'
 
       - name: Check for outdated packages
@@ -112,7 +112,8 @@ jobs:
           
           echo ""
           echo "🔍 Checking for outdated packages:"
-          dart pub outdated --mode=null-safety || true
+          # Use --no-dev-dependencies to avoid dev dependency issues if needed
+          dart pub outdated --no-dependency-overrides || true
           
           echo ""
           echo "💡 To update packages manually:"
@@ -122,7 +123,7 @@ jobs:
         if: github.event.inputs.force_update
         run: |
           # Create an issue to track outdated dependencies
-          OUTDATED_OUTPUT=$(dart pub outdated --mode=null-safety --json 2>/dev/null || echo '{"packages":[]}')
+          OUTDATED_OUTPUT=$(dart pub outdated --json --no-dependency-overrides 2>/dev/null || echo '{"packages":[]}')
           
           if echo "$OUTDATED_OUTPUT" | jq -e '.packages | length > 0' > /dev/null 2>&1; then
             echo "Found outdated packages, creating tracking issue..."
@@ -134,7 +135,7 @@ jobs:
             
             ### Outdated Packages
             \`\`\`
-            $(dart pub outdated --mode=null-safety)
+            $(dart pub outdated --no-dependency-overrides 2>/dev/null || echo 'Failed to get outdated packages')
             \`\`\`
             
             ### Action Required

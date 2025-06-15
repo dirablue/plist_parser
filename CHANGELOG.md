@@ -1,3 +1,8 @@
+## 0.2.4
+
+### Other Changes
+- chore: Update Dart SDK requirement from >=2.19.0 to >=3.0.0, Flutter version from 3.24.3 to 3.27.1
+
 ## 0.2.3
 
 ### Bug Fixes
