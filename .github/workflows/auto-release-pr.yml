@@ -1,0 +1,244 @@
+name: Auto Release PR
+
+on:
+  push:
+    branches: [develop]
+  schedule:
+    # Run weekly on Sundays at 10:00 JST to create release PR if there are changes
+    - cron: "0 1 * * 0"  # 10:00 JST (UTC+9)
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Force specific version type (leave empty for auto-detection)'
+        required: false
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+
+jobs:
+  create-release-pr:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout develop branch
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.3'
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: dart pub get
+
+      - name: Run tests
+        run: flutter test --coverage
+
+      - name: Check if there are changes since last release
+        id: check-changes
+        run: |
+          # Get the latest release tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 origin/master 2>/dev/null || echo "")
+          
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No previous releases found"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            # Check if there are commits between latest tag and develop
+            COMMITS_SINCE_TAG=$(git rev-list ${LATEST_TAG}..origin/develop --count)
+            
+            if [ "$COMMITS_SINCE_TAG" -gt 0 ]; then
+              echo "Found $COMMITS_SINCE_TAG commits since last release"
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+            else
+              echo "No changes since last release"
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Determine next version
+        if: steps.check-changes.outputs.has_changes == 'true'
+        id: next-version
+        run: |
+          # Get current version from pubspec.yaml
+          CURRENT_VERSION=$(grep "^version:" pubspec.yaml | sed 's/version: //')
+          echo "Current version: $CURRENT_VERSION"
+          
+          # Parse version (assuming semantic versioning)
+          IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+          MAJOR=${VERSION_PARTS[0]}
+          MINOR=${VERSION_PARTS[1]}
+          PATCH=${VERSION_PARTS[2]}
+          
+          # Get commit messages since last release to determine version bump type
+          LATEST_TAG=$(git describe --tags --abbrev=0 origin/master 2>/dev/null || echo "")
+          
+          if [ -z "$LATEST_TAG" ]; then
+            COMMIT_RANGE="origin/develop"
+          else
+            COMMIT_RANGE="${LATEST_TAG}..origin/develop"
+          fi
+          
+          COMMIT_MESSAGES=$(git log $COMMIT_RANGE --pretty=format:"%s")
+          
+          # Check for breaking changes or major updates
+          if echo "$COMMIT_MESSAGES" | grep -qE "(BREAKING CHANGE|breaking change|major:)"; then
+            NEW_MAJOR=$((MAJOR + 1))
+            NEW_VERSION="${NEW_MAJOR}.0.0"
+            VERSION_TYPE="major"
+          # Check for features or minor updates
+          elif echo "$COMMIT_MESSAGES" | grep -qE "(feat:|feature:|minor:)"; then
+            NEW_MINOR=$((MINOR + 1))
+            NEW_VERSION="${MAJOR}.${NEW_MINOR}.0"
+            VERSION_TYPE="minor"
+          # Default to patch
+          else
+            NEW_PATCH=$((PATCH + 1))
+            NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
+            VERSION_TYPE="patch"
+          fi
+          
+          echo "Next version: $NEW_VERSION (${VERSION_TYPE})"
+          echo "next_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "version_type=$VERSION_TYPE" >> $GITHUB_OUTPUT
+
+      - name: Check if release PR already exists
+        if: steps.check-changes.outputs.has_changes == 'true'
+        id: check-pr
+        run: |
+          # Check if there's already an open PR from develop to master
+          EXISTING_PR=$(gh pr list --base master --head develop --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+          
+          if [ -n "$EXISTING_PR" ]; then
+            echo "Release PR #$EXISTING_PR already exists"
+            echo "pr_exists=true" >> $GITHUB_OUTPUT
+            echo "pr_number=$EXISTING_PR" >> $GITHUB_OUTPUT
+          else
+            echo "No existing release PR found"
+            echo "pr_exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update version in pubspec.yaml
+        if: steps.check-changes.outputs.has_changes == 'true' && steps.check-pr.outputs.pr_exists == 'false'
+        run: |
+          NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
+          sed -i'' -e "s/^version:.*/version: $NEW_VERSION/" pubspec.yaml
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add pubspec.yaml
+          git commit -m "chore: bump version to $NEW_VERSION"
+          git push origin develop
+
+      - name: Generate changelog
+        if: steps.check-changes.outputs.has_changes == 'true' && steps.check-pr.outputs.pr_exists == 'false'
+        id: changelog
+        run: |
+          NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
+          LATEST_TAG=$(git describe --tags --abbrev=0 origin/master 2>/dev/null || echo "")
+          
+          if [ -z "$LATEST_TAG" ]; then
+            COMMIT_RANGE="origin/develop"
+          else
+            COMMIT_RANGE="${LATEST_TAG}..origin/develop"
+          fi
+          
+          echo "## Changes in v$NEW_VERSION" > release_notes.md
+          echo "" >> release_notes.md
+          
+          # Group commits by type
+          echo "### Features" >> release_notes.md
+          git log $COMMIT_RANGE --pretty=format:"- %s" --grep="feat:" --grep="feature:" >> release_notes.md || true
+          echo "" >> release_notes.md
+          
+          echo "### Bug Fixes" >> release_notes.md
+          git log $COMMIT_RANGE --pretty=format:"- %s" --grep="fix:" --grep="bug:" >> release_notes.md || true
+          echo "" >> release_notes.md
+          
+          echo "### Chores" >> release_notes.md
+          git log $COMMIT_RANGE --pretty=format:"- %s" --grep="chore:" >> release_notes.md || true
+          echo "" >> release_notes.md
+          
+          echo "### Dependencies" >> release_notes.md
+          git log $COMMIT_RANGE --pretty=format:"- %s" --grep="dependencies" >> release_notes.md || true
+          echo "" >> release_notes.md
+          
+          # Remove empty sections
+          sed -i '/^### [^#]*$/N;/\n$/d' release_notes.md
+          
+          # Set output for PR body
+          {
+            echo "changelog<<EOF"
+            cat release_notes.md
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Create release PR
+        if: steps.check-changes.outputs.has_changes == 'true' && steps.check-pr.outputs.pr_exists == 'false'
+        run: |
+          NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
+          VERSION_TYPE="${{ steps.next-version.outputs.version_type }}"
+          
+          PR_TITLE="🚀 Release v$NEW_VERSION"
+          
+          PR_BODY="## Release v$NEW_VERSION
+          
+          This PR contains changes ready for release to master branch.
+          
+          **Version Type:** $VERSION_TYPE
+          
+          ### What happens when this PR is merged:
+          1. Version will be tagged as v$NEW_VERSION
+          2. Package will be automatically published to pub.dev
+          3. GitHub release will be created with changelog
+          
+          ${{ steps.changelog.outputs.changelog }}
+          
+          ---
+          
+          **Instructions:**
+          - Review the changes above
+          - Merge this PR to trigger the automated release process
+          - The package will be automatically published to pub.dev after merge
+          
+          _This PR was automatically created by the release workflow._"
+          
+          gh pr create \
+            --title "$PR_TITLE" \
+            --body "$PR_BODY" \
+            --base master \
+            --head develop \
+            --label "release" \
+            --label "auto-generated"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update existing release PR
+        if: steps.check-changes.outputs.has_changes == 'true' && steps.check-pr.outputs.pr_exists == 'true'
+        run: |
+          NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
+          PR_NUMBER="${{ steps.check-pr.outputs.pr_number }}"
+          
+          gh pr comment $PR_NUMBER \
+            --body "🔄 **Release PR Updated**
+            
+            New changes have been added to the develop branch since this PR was created.
+            The release is ready with version v$NEW_VERSION.
+            
+            ${{ steps.changelog.outputs.changelog }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

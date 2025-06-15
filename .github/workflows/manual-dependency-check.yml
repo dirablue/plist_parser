@@ -1,0 +1,156 @@
+name: Manual Dependency Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_update:
+        description: 'Force check for updates even if recently checked'
+        required: false
+        default: false
+        type: boolean
+      ecosystem:
+        description: 'Which ecosystem to check (all, pub, github-actions)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - pub
+          - github-actions
+
+jobs:
+  trigger-dependabot:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Trigger Dependabot check
+        run: |
+          echo "🤖 Triggering manual Dependabot check..."
+          echo "Ecosystem: ${{ github.event.inputs.ecosystem }}"
+          echo "Force update: ${{ github.event.inputs.force_update }}"
+          
+          # Note: GitHub doesn't provide a direct API to trigger Dependabot
+          # This workflow serves as documentation and can trigger related processes
+          
+          if [ "${{ github.event.inputs.ecosystem }}" = "all" ] || [ "${{ github.event.inputs.ecosystem }}" = "pub" ]; then
+            echo "📦 Checking Dart/Flutter dependencies..."
+            
+            # Check current pubspec.yaml dependencies
+            if [ -f "pubspec.yaml" ]; then
+              echo "Current dependencies in pubspec.yaml:"
+              grep -A 20 "^dependencies:" pubspec.yaml || true
+              echo ""
+              grep -A 20 "^dev_dependencies:" pubspec.yaml || true
+            fi
+          fi
+          
+          if [ "${{ github.event.inputs.ecosystem }}" = "all" ] || [ "${{ github.event.inputs.ecosystem }}" = "github-actions" ]; then
+            echo "⚙️ Checking GitHub Actions dependencies..."
+            
+            # List all GitHub Actions in workflows
+            echo "Current GitHub Actions in workflows:"
+            find .github/workflows -name "*.yml" -o -name "*.yaml" | xargs grep -h "uses:" | sort | uniq || true
+          fi
+
+      - name: Check existing Dependabot PRs
+        run: |
+          echo "🔍 Checking existing Dependabot PRs..."
+          
+          # List open PRs from Dependabot
+          echo "Open Dependabot PRs:"
+          gh pr list --author "app/dependabot" --state open --json number,title,headRefName --template '{{range .}}PR #{{.number}}: {{.title}} ({{.headRefName}}){{"\n"}}{{end}}' || echo "No open Dependabot PRs found"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Instructions for manual trigger
+        run: |
+          echo "📋 To manually trigger Dependabot:"
+          echo ""
+          echo "1. Via GitHub Web UI:"
+          echo "   - Go to Insights → Dependency graph → Dependabot"
+          echo "   - Click 'Check for updates' for each ecosystem"
+          echo ""
+          echo "2. Via GitHub API (requires admin token):"
+          echo "   curl -X POST \\"
+          echo "     -H \"Accept: application/vnd.github.v3+json\" \\"
+          echo "     -H \"Authorization: token YOUR_TOKEN\" \\"
+          echo "     https://api.github.com/repos/${{ github.repository }}/dependabot/alerts"
+          echo ""
+          echo "3. Alternative approaches:"
+          echo "   - Update dependabot.yml configuration"
+          echo "   - Wait for scheduled run (Monday 9:00 JST)"
+          echo "   - Security alerts trigger immediate checks"
+
+  check-outdated-dependencies:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.ecosystem == 'all' || github.event.inputs.ecosystem == 'pub'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.3'
+          channel: 'stable'
+
+      - name: Check for outdated packages
+        run: |
+          echo "📦 Checking for outdated Dart packages..."
+          
+          dart pub get
+          echo ""
+          echo "Current dependency versions:"
+          dart pub deps --style=compact
+          
+          echo ""
+          echo "🔍 Checking for outdated packages:"
+          dart pub outdated --mode=null-safety || true
+          
+          echo ""
+          echo "💡 To update packages manually:"
+          echo "  dart pub upgrade"
+
+      - name: Create issue for outdated packages
+        if: github.event.inputs.force_update
+        run: |
+          # Create an issue to track outdated dependencies
+          OUTDATED_OUTPUT=$(dart pub outdated --mode=null-safety --json 2>/dev/null || echo '{"packages":[]}')
+          
+          if echo "$OUTDATED_OUTPUT" | jq -e '.packages | length > 0' > /dev/null 2>&1; then
+            echo "Found outdated packages, creating tracking issue..."
+            
+            ISSUE_BODY="## Outdated Dependencies Report
+            
+            Generated on: $(date)
+            Triggered by: Manual dependency check
+            
+            ### Outdated Packages
+            \`\`\`
+            $(dart pub outdated --mode=null-safety)
+            \`\`\`
+            
+            ### Action Required
+            - [ ] Review outdated packages
+            - [ ] Update dependencies if safe
+            - [ ] Test compatibility
+            - [ ] Create PR for updates
+            
+            This issue was automatically created by the manual dependency check workflow."
+            
+            gh issue create \
+              --title "📦 Outdated Dependencies Found - $(date +%Y-%m-%d)" \
+              --body "$ISSUE_BODY" \
+              --label "dependencies,maintenance" || echo "Failed to create issue"
+          else
+            echo "✅ All packages are up to date!"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
