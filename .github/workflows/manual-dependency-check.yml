@@ -119,7 +119,7 @@ jobs:
           echo "  dart pub upgrade"
 
       - name: Create issue for outdated packages
-        if: github.event.inputs.force_update == 'true'
+        if: github.event.inputs.force_update
         run: |
           # Create an issue to track outdated dependencies
           OUTDATED_OUTPUT=$(dart pub outdated --mode=null-safety --json 2>/dev/null || echo '{"packages":[]}')
