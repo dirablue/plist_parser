@@ -1,3 +1,6 @@
+## 0.2.0
+- Add: Dependencies and security auto update.
+
 ## 0.0.11
 - Fix: Pub.dev static analysis issues fixed.
 

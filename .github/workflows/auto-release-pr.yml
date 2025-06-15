@@ -170,6 +170,79 @@ jobs:
           git commit -m "chore: bump version to $NEW_VERSION"
           git push origin develop
 
+      - name: Update README.md version
+        if: steps.check-changes.outputs.has_changes == 'true' && steps.check-pr.outputs.pr_exists == 'false'
+        run: |
+          NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
+          # Update version in README.md dependencies section
+          sed -i'' -e "s/plist_parser: \".*\"/plist_parser: \"^$NEW_VERSION\"/" README.md
+          
+          git add README.md
+          git commit -m "docs: update README version to $NEW_VERSION"
+          git push origin develop
+
+      - name: Update CHANGELOG.md
+        if: steps.check-changes.outputs.has_changes == 'true' && steps.check-pr.outputs.pr_exists == 'false'
+        run: |
+          NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
+          VERSION_TYPE="${{ steps.next-version.outputs.version_type }}"
+          LATEST_TAG=$(git describe --tags --abbrev=0 origin/master 2>/dev/null || echo "")
+          
+          if [ -z "$LATEST_TAG" ]; then
+            COMMIT_RANGE="origin/develop"
+          else
+            COMMIT_RANGE="${LATEST_TAG}..origin/develop"
+          fi
+          
+          # Create temporary changelog entry
+          echo "## $NEW_VERSION" > changelog_entry.md
+          echo "" >> changelog_entry.md
+          
+          # Add features
+          FEATURES=$(git log $COMMIT_RANGE --pretty=format:"- %s" --grep="feat:" --grep="feature:" 2>/dev/null | head -10)
+          if [ -n "$FEATURES" ]; then
+            echo "### Features" >> changelog_entry.md
+            echo "$FEATURES" >> changelog_entry.md
+            echo "" >> changelog_entry.md
+          fi
+          
+          # Add bug fixes
+          FIXES=$(git log $COMMIT_RANGE --pretty=format:"- %s" --grep="fix:" --grep="bugfix:" 2>/dev/null | head -10)
+          if [ -n "$FIXES" ]; then
+            echo "### Bug Fixes" >> changelog_entry.md
+            echo "$FIXES" >> changelog_entry.md
+            echo "" >> changelog_entry.md
+          fi
+          
+          # Add breaking changes
+          BREAKING=$(git log $COMMIT_RANGE --pretty=format:"- %s" --grep="BREAKING CHANGE" --grep="breaking change" 2>/dev/null | head -5)
+          if [ -n "$BREAKING" ]; then
+            echo "### Breaking Changes" >> changelog_entry.md
+            echo "$BREAKING" >> changelog_entry.md
+            echo "" >> changelog_entry.md
+          fi
+          
+          # Add other changes if no specific categories found
+          if [ -z "$FEATURES" ] && [ -z "$FIXES" ] && [ -z "$BREAKING" ]; then
+            OTHER_CHANGES=$(git log $COMMIT_RANGE --pretty=format:"- %s" 2>/dev/null | head -5)
+            if [ -n "$OTHER_CHANGES" ]; then
+              echo "$OTHER_CHANGES" >> changelog_entry.md
+              echo "" >> changelog_entry.md
+            fi
+          fi
+          
+          # Prepend to existing CHANGELOG.md
+          if [ -f CHANGELOG.md ]; then
+            cat CHANGELOG.md >> changelog_entry.md
+            mv changelog_entry.md CHANGELOG.md
+          else
+            mv changelog_entry.md CHANGELOG.md
+          fi
+          
+          git add CHANGELOG.md
+          git commit -m "docs: update CHANGELOG for v$NEW_VERSION"
+          git push origin develop
+
       - name: Generate changelog
         if: steps.check-changes.outputs.has_changes == 'true' && steps.check-pr.outputs.pr_exists == 'false'
         id: changelog
