@@ -1,0 +1,170 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (leave empty to use pubspec.yaml version)'
+        required: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout master branch
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.3'
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: dart pub get
+
+      - name: Run final tests
+        run: flutter test --coverage
+
+      - name: Analyze code
+        run: dart analyze --fatal-infos --fatal-warnings
+
+      - name: Format check
+        run: dart format . --set-exit-if-changed
+
+      - name: Get version
+        id: get-version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            echo "Using manual version: $VERSION"
+          else
+            VERSION=$(grep "^version:" pubspec.yaml | sed 's/version: //')
+            echo "Using pubspec.yaml version: $VERSION"
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if tag already exists
+        id: check-tag
+        run: |
+          TAG="${{ steps.get-version.outputs.tag }}"
+          
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists"
+            echo "tag_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag $TAG does not exist"
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate changelog for release
+        if: steps.check-tag.outputs.tag_exists == 'false'
+        id: changelog
+        run: |
+          VERSION="${{ steps.get-version.outputs.version }}"
+          TAG="${{ steps.get-version.outputs.tag }}"
+          
+          # Get the previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            COMMIT_RANGE="HEAD"
+          else
+            COMMIT_RANGE="${PREVIOUS_TAG}..HEAD"
+          fi
+          
+          echo "## Release v$VERSION" > release_notes.md
+          echo "" >> release_notes.md
+          echo "Released on $(date +'%Y-%m-%d')" >> release_notes.md
+          echo "" >> release_notes.md
+          
+          # Group commits by type
+          echo "### 🚀 Features" >> release_notes.md
+          git log $COMMIT_RANGE --pretty=format:"- %s" --grep="feat:" --grep="feature:" >> release_notes.md 2>/dev/null || echo "- No new features" >> release_notes.md
+          echo "" >> release_notes.md
+          
+          echo "### 🐛 Bug Fixes" >> release_notes.md
+          git log $COMMIT_RANGE --pretty=format:"- %s" --grep="fix:" --grep="bug:" >> release_notes.md 2>/dev/null || echo "- No bug fixes" >> release_notes.md
+          echo "" >> release_notes.md
+          
+          echo "### 🔧 Maintenance" >> release_notes.md
+          git log $COMMIT_RANGE --pretty=format:"- %s" --grep="chore:" >> release_notes.md 2>/dev/null || echo "- No maintenance changes" >> release_notes.md
+          echo "" >> release_notes.md
+          
+          echo "### 📦 Dependencies" >> release_notes.md
+          git log $COMMIT_RANGE --pretty=format:"- %s" --grep="dependencies" --grep="deps:" >> release_notes.md 2>/dev/null || echo "- No dependency updates" >> release_notes.md
+          echo "" >> release_notes.md
+          
+          # Remove empty sections
+          sed -i '/^### [^#]*$/N;/\n- No /d' release_notes.md
+          
+          # Set output for GitHub release
+          {
+            echo "changelog<<EOF"
+            cat release_notes.md
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Create and push tag
+        if: steps.check-tag.outputs.tag_exists == 'false'
+        run: |
+          TAG="${{ steps.get-version.outputs.tag }}"
+          VERSION="${{ steps.get-version.outputs.version }}"
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git tag -a "$TAG" -m "Release version $VERSION"
+          git push origin "$TAG"
+
+      - name: Create GitHub Release
+        if: steps.check-tag.outputs.tag_exists == 'false'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get-version.outputs.tag }}
+          release_name: Release ${{ steps.get-version.outputs.tag }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          draft: false
+          prerelease: false
+
+      - name: Setup pub credentials
+        if: steps.check-tag.outputs.tag_exists == 'false'
+        env:
+          PUB_CREDENTIALS: ${{ secrets.PUB_DEV_CREDENTIALS }}
+        run: |
+          mkdir -p ~/.pub-cache
+          echo "$PUB_CREDENTIALS" > ~/.pub-cache/credentials.json
+
+      - name: Publish to pub.dev
+        if: steps.check-tag.outputs.tag_exists == 'false'
+        run: |
+          echo "Publishing package to pub.dev..."
+          dart pub publish --force
+
+      - name: Notify completion
+        if: steps.check-tag.outputs.tag_exists == 'false'
+        run: |
+          VERSION="${{ steps.get-version.outputs.version }}"
+          echo "✅ Successfully released version $VERSION"
+          echo "📦 Package published to pub.dev"
+          echo "🏷️ Tag created: ${{ steps.get-version.outputs.tag }}"
+          echo "📝 GitHub release created"
+
+      - name: Skip release (tag exists)
+        if: steps.check-tag.outputs.tag_exists == 'true'
+        run: |
+          echo "⏭️ Skipping release - tag ${{ steps.get-version.outputs.tag }} already exists"
