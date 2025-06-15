@@ -23,7 +23,7 @@ Dart SDK
 
 ```
 environment:
-  sdk: ">=2.16.0 <4.0.0"
+  sdk: ">=3.0.0 <4.0.0"
 ```
 
 ## 🐕 Usage
