@@ -1,3 +1,12 @@
+## 0.2.2
+### Other Changes
+- chore: auto-release-pr
+- chore: auto-release-pr, CHANGELOG.md, README.md
+- chore: bump version to 0.2.1
+
+## 0.2.0
+- Add: Dependencies and security auto update.
+
 ## 0.0.11
 - Fix: Pub.dev static analysis issues fixed.
 
