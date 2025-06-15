@@ -1,81 +1,62 @@
 name: Dependabot Auto-merge
 
 on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches: [develop]
   pull_request:
     types: [opened, synchronize, reopened]
     branches: [develop]
-  workflow_run:
-    workflows: ["Build"]
-    types: [completed]
-    branches: [develop]
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: 'PR number to process (leave empty to process all open Dependabot PRs)'
-        required: false
-      force_merge:
-        description: 'Force auto-merge even for major updates (use with caution)'
-        required: false
-        default: false
-        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  actions: read
 
 jobs:
   dependabot-auto-merge:
     runs-on: ubuntu-latest
-    if: |
-      (github.actor == 'dependabot[bot]' && github.event_name == 'pull_request') ||
-      (github.event_name == 'workflow_run' && 
-       github.event.workflow_run.conclusion == 'success' && 
-       github.event.workflow_run.head_branch != 'develop' &&
-       github.event.workflow_run.head_branch != 'master') ||
-      github.event_name == 'workflow_dispatch'
-    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Debug info
+        run: |
+          echo "Event: ${{ github.event_name }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "PR Author: ${{ github.event.pull_request.user.login }}"
+          echo "PR Number: ${{ github.event.pull_request.number }}"
+          echo "PR URL: ${{ github.event.pull_request.html_url }}"
+          echo "HEAD SHA: ${{ github.event.pull_request.head.sha }}"
+
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        continue-on-error: true
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Get PR number for workflow_run event
-        if: github.event_name == 'workflow_run'
-        id: get-pr
+      - name: Check if Dependabot (alternative)
+        id: dependabot-check-alt
         run: |
-          # Find the PR associated with this workflow run
-          PR_NUMBER=$(gh pr list --head "${{ github.event.workflow_run.head_branch }}" --json number --jq '.[0].number')
-          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "Found PR #$PR_NUMBER for branch ${{ github.event.workflow_run.head_branch }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set PR number
-        id: set-pr-number
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            echo "pr_number=${{ steps.get-pr.outputs.pr_number }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.pr_number }}" ]; then
-            echo "pr_number=${{ github.event.inputs.pr_number }}" >> $GITHUB_OUTPUT
-          else
-            echo "pr_number=${{ github.event.number }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Check if PR author is dependabot
-        id: check-author
-        run: |
-          PR_AUTHOR=$(gh pr view ${{ steps.set-pr-number.outputs.pr_number }} --json author --jq '.author.login')
-          echo "pr_author=$PR_AUTHOR" >> $GITHUB_OUTPUT
+          echo "Checking various Dependabot indicators..."
+          echo "github.actor: ${{ github.actor }}"
+          echo "github.event.pull_request.user.login: ${{ github.event.pull_request.user.login }}"
+          echo "github.event.pull_request.user.type: ${{ github.event.pull_request.user.type }}"
+          echo "github.event.pull_request.head.repo.full_name: ${{ github.event.pull_request.head.repo.full_name }}"
           
-          if [ "$PR_AUTHOR" = "dependabot[bot]" ] || [ "${{ github.event.inputs.force_merge }}" = "true" ]; then
+          # Multiple ways to detect Dependabot
+          if [[ "${{ github.actor }}" == "dependabot[bot]" ]] || \
+             [[ "${{ github.event.pull_request.user.login }}" == "dependabot[bot]" ]] || \
+             [[ "${{ github.event.pull_request.user.type }}" == "Bot" && "${{ github.event.pull_request.user.login }}" =~ dependabot ]] || \
+             [[ "${{ steps.metadata.outcome }}" == "success" ]]; then
             echo "is_dependabot=true" >> $GITHUB_OUTPUT
+            echo "✅ This is a Dependabot PR"
           else
             echo "is_dependabot=false" >> $GITHUB_OUTPUT
-            echo "PR author is not dependabot, skipping auto-merge"
+            echo "❌ This is NOT a Dependabot PR"
           fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Wait for build workflow to complete
-        if: steps.check-author.outputs.is_dependabot == 'true' && github.event_name != 'workflow_run'
+      - name: Wait for tests to complete
+        if: steps.dependabot-check-alt.outputs.is_dependabot == 'true'
         uses: lewagon/wait-on-check-action@v1.3.4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
@@ -84,117 +65,13 @@ jobs:
           wait-interval: 30
           allowed-conclusions: success
 
-      - name: Check if PR is for patch/minor updates
-        if: steps.check-author.outputs.is_dependabot == 'true'
-        id: check-update-type
+      - name: Approve and merge PR
+        if: steps.dependabot-check-alt.outputs.is_dependabot == 'true'
         run: |
-          PR_NUMBER=${{ steps.set-pr-number.outputs.pr_number }}
-          echo "Checking update type for PR #$PR_NUMBER"
-          
-          # Get PR title
-          PR_TITLE=$(gh pr view $PR_NUMBER --json title --jq '.title')
-          echo "PR Title: $PR_TITLE"
-          
-          # Check if this is a manual force merge
-          if [ "${{ github.event.inputs.force_merge }}" = "true" ]; then
-            echo "auto_merge=true" >> $GITHUB_OUTPUT
-            echo "Force merge enabled via manual trigger - will auto-merge"
-            exit 0
-          fi
-          
-          # Check for major version updates (which require manual review)
-          if echo "$PR_TITLE" | grep -qE "(major|BREAKING|breaking)"; then
-            echo "auto_merge=false" >> $GITHUB_OUTPUT
-            echo "This is a major update with potential breaking changes - requires manual review"
-          # Check for security updates (auto-merge these)
-          elif echo "$PR_TITLE" | grep -qE "(security|vulnerability|CVE)"; then
-            echo "auto_merge=true" >> $GITHUB_OUTPUT
-            echo "This is a security update - will auto-merge"
-          # For dependency updates, check if they are patch/minor (auto-merge) or major (manual review)
-          elif echo "$PR_TITLE" | grep -qE "(dependencies|deps|bump)"; then
-            # Most dependency updates are safe for auto-merge unless explicitly marked as major
-            if echo "$PR_TITLE" | grep -qE "from [0-9]+\.[0-9]+\.[0-9]+ to [0-9]+\.[0-9]+\.[0-9]+"; then
-              # Extract version numbers to determine if it's a major update
-              OLD_VERSION=$(echo "$PR_TITLE" | grep -oE "from [0-9]+\.[0-9]+\.[0-9]+" | sed 's/from //')
-              NEW_VERSION=$(echo "$PR_TITLE" | grep -oE "to [0-9]+\.[0-9]+\.[0-9]+" | sed 's/to //')
-              
-              OLD_MAJOR=$(echo "$OLD_VERSION" | cut -d. -f1)
-              NEW_MAJOR=$(echo "$NEW_VERSION" | cut -d. -f1)
-              
-              if [ "$OLD_MAJOR" != "$NEW_MAJOR" ]; then
-                echo "auto_merge=false" >> $GITHUB_OUTPUT
-                echo "This is a major version update ($OLD_VERSION -> $NEW_VERSION) - requires manual review"
-              else
-                echo "auto_merge=true" >> $GITHUB_OUTPUT
-                echo "This is a patch/minor update ($OLD_VERSION -> $NEW_VERSION) - will auto-merge"
-              fi
-            else
-              echo "auto_merge=true" >> $GITHUB_OUTPUT
-              echo "This appears to be a dependency update - will auto-merge"
-            fi
-          else
-            echo "auto_merge=false" >> $GITHUB_OUTPUT
-            echo "Unknown update type - requires manual review"
-          fi
+          echo "Approving PR: $PR_URL"
+          gh pr review --approve "$PR_URL"
+          echo "Setting auto-merge for PR: $PR_URL"
+          gh pr merge --auto --squash "$PR_URL"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Auto-approve PR
-        if: steps.check-author.outputs.is_dependabot == 'true' && steps.check-update-type.outputs.auto_merge == 'true'
-        run: |
-          PR_NUMBER=${{ steps.set-pr-number.outputs.pr_number }}
-          gh pr review $PR_NUMBER --approve --body "Auto-approved by Dependabot auto-merge workflow"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Enable auto-merge
-        if: steps.check-author.outputs.is_dependabot == 'true' && steps.check-update-type.outputs.auto_merge == 'true'
-        run: |
-          PR_NUMBER=${{ steps.set-pr-number.outputs.pr_number }}
-          
-          # Wait a bit to ensure all checks are properly registered
-          sleep 10
-          
-          # Enable auto-merge with squash
-          gh pr merge $PR_NUMBER --squash --auto
-          
-          echo "Auto-merge enabled. PR will be merged automatically when all required checks pass."
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Add comment for manual review
-        if: steps.check-author.outputs.is_dependabot == 'true' && steps.check-update-type.outputs.auto_merge == 'false'
-        run: |
-          PR_NUMBER=${{ steps.set-pr-number.outputs.pr_number }}
-          PR_TITLE=$(gh pr view $PR_NUMBER --json title --jq '.title')
-          
-          gh pr comment $PR_NUMBER --body "🔍 **Manual Review Required**
-          
-          This PR requires manual review for one of the following reasons:
-          - Major version update with potential breaking changes
-          - Unknown update type that couldn't be automatically categorized
-          
-          Please review the changes and merge manually if appropriate.
-          
-          PR Title: \`$PR_TITLE\`"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Summary
-        if: always() && steps.check-author.outputs.is_dependabot == 'true'
-        run: |
-          PR_NUMBER=${{ steps.set-pr-number.outputs.pr_number }}
-          PR_TITLE=$(gh pr view $PR_NUMBER --json title --jq '.title')
-          PR_AUTHOR=$(gh pr view $PR_NUMBER --json author --jq '.author.login')
-          
-          echo "## Dependabot Auto-merge Summary"
-          echo "PR #$PR_NUMBER: $PR_TITLE"
-          echo "Author: $PR_AUTHOR"
-          echo "Auto-merge enabled: ${{ steps.check-update-type.outputs.auto_merge }}"
-          
-          if [ "${{ steps.check-update-type.outputs.auto_merge }}" = "true" ]; then
-            echo "✅ This PR will be automatically merged after successful checks"
-          else
-            echo "⏸️ This PR requires manual review and merge"
-          fi
-        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
