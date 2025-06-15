@@ -58,6 +58,44 @@ jobs:
       - name: Run tests
         run: flutter test --coverage
 
+      - name: Generate coverage report for artifact
+        run: |
+          echo "Generating coverage report..."
+          dart pub global activate coverage
+          dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --packages=.dart_tool/package_config.json --report-on=lib
+          
+          # Generate HTML coverage report for easier viewing
+          sudo apt-get update -qq
+          sudo apt-get install -y lcov
+          genhtml coverage/lcov.info -o coverage/html --title "Release Coverage Report"
+          
+          # Display coverage summary
+          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          lcov --summary coverage/lcov.info >> $GITHUB_STEP_SUMMARY 2>&1 || echo "Failed to generate summary" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload coverage report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-coverage-report
+          path: |
+            coverage/lcov.info
+            coverage/html/
+          retention-days: 30
+
+      - name: Reset all uncommitted changes
+        run: |
+          echo "Resetting all uncommitted changes after test coverage..."
+          # Reset all tracked files to HEAD
+          git reset --hard HEAD
+          # Remove all untracked files and directories
+          git clean -fd
+          # Show status for verification
+          echo "Git status after cleanup:"
+          git status
+
       - name: Determine next version
         id: next-version
         run: |
