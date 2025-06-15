@@ -43,7 +43,7 @@ git push origin develop
 dart pub login
 
 # 認証情報を確認
-cat ~/.pub-cache/credentials.json
+cat ~/Library/Application\ Support/dart/pub-credentials.json
 ```
 
 **手順2: GitHubSecretsの設定**
