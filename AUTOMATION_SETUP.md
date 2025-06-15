@@ -36,19 +36,39 @@ git push origin develop
 ### 2. GitHub Secretsの設定
 
 #### A. pub.dev APIトークンの取得と設定
-1. [pub.dev](https://pub.dev)にログイン
-2. アカウント設定でAPIトークンを生成
-3. GitHubリポジトリの `Settings` > `Secrets and variables` > `Actions` で以下を追加:
+
+**手順1: pub.dev認証情報の取得**
+```bash
+# ローカルでpub.devにログイン
+dart pub login
+
+# 認証情報を確認
+cat ~/.pub-cache/credentials.json
+```
+
+**手順2: GitHubSecretsの設定**
+1. GitHubリポジトリの `Settings` > `Secrets and variables` > `Actions` へ移動
+2. `New repository secret` をクリック
+3. 以下の情報を追加:
    ```
    Name: PUB_DEV_CREDENTIALS
-   Value: {
-     "accessToken": "your-pub-dev-access-token",
-     "refreshToken": "your-pub-dev-refresh-token",
-     "tokenEndpoint": "https://accounts.google.com/o/oauth2/token",
-     "scopes": ["openid", "https://www.googleapis.com/auth/userinfo.email"],
-     "expiration": 1234567890000
-   }
+   Value: (上記で取得したcredentials.jsonの内容をそのまま貼り付け)
    ```
+
+**認証情報の例:**
+```json
+{
+  "accessToken": "ya29.a0AfH6SMC...",
+  "refreshToken": "1//0GwPp9X6qJ...",
+  "tokenEndpoint": "https://oauth2.googleapis.com/token",
+  "scopes": ["openid", "https://www.googleapis.com/auth/userinfo.email"],
+  "expiration": 1640995200000
+}
+```
+
+**注意:**
+- 実際の認証情報は絶対に公開しないでください
+- トークンは定期的に更新される場合があります
 
 #### B. Codecovトークンの設定（既存）
 ```
@@ -67,10 +87,13 @@ assignees:
 
 ## 🚀 ワークフローの動作
 
-### 1. 依存関係の自動更新
+### 1. 依存関係の自動更新（Dependabot）
 - **頻度**: 毎週月曜日 9:00 JST
-- **動作**: Dependabotが依存関係をチェックし、アップデートがあればPRを作成
-- **対象ブランチ**: `develop`
+- **動作**: 
+  1. Dependabotが依存関係をチェック
+  2. アップデートがあれば自動的にfeatureブランチ（`dependabot/pub/...`）を作成
+  3. developブランチに対してPRを作成
+- **対象ブランチ**: `develop` ← `dependabot/pub/...`
 
 ### 2. 自動マージ (Dependabot)
 - **トリガー**: DependabotによるPR作成時
@@ -78,25 +101,35 @@ assignees:
   - patch/minorアップデート
   - セキュリティアップデート
   - すべてのテストが通過
-- **動作**: 自動承認・マージ
+- **動作**: 
+  1. コードの解析とテスト実行
+  2. フォーマットチェック
+  3. 自動承認・マージ（squash merge）
+  4. featureブランチは自動削除
 
-### 3. 自動リリースPR作成
+### 3. 脆弱性対応の自動化
+- **セキュリティアラート**: 即座にPRが作成され、自動マージ対象
+- **重大な脆弱性**: 手動レビューが必要な場合はコメントで通知
+
+### 4. 自動リリースPR作成
 - **頻度**: 
   - developブランチへのpush時
   - 毎週日曜日 10:00 JST
 - **条件**: 前回リリースから変更がある場合
 - **動作**: 
-  - バージョンを自動決定（semantic versioning）
-  - changelogを生成
-  - `develop` → `master` のPRを作成
+  1. セマンティックバージョニングでバージョンを自動決定
+  2. コミットメッセージから変更ログを生成
+  3. pubspec.yamlのバージョンを更新
+  4. `develop` → `master` のPRを作成
 
-### 4. 自動リリース
-- **トリガー**: `master` ブランチへのpush
+### 5. 自動リリース
+- **トリガー**: `master` ブランチへのマージ
 - **動作**:
-  - テスト実行
-  - GitHubタグ作成
-  - GitHub Release作成
-  - pub.devへパッケージ公開
+  1. 最終テスト実行
+  2. コード解析・フォーマットチェック
+  3. GitHubタグ作成（v1.2.3形式）
+  4. GitHub Release作成（変更ログ付き）
+  5. pub.devへパッケージ自動公開
 
 ### 5. セキュリティスキャン
 - **頻度**: 毎日 2:00 JST
@@ -104,7 +137,7 @@ assignees:
 
 ## 📋 運用フロー
 
-### 通常の開発フロー
+### 通常の開発フロー（推奨）
 ```
 1. featureブランチを作成
    git checkout -b feature/new-feature develop
@@ -113,16 +146,39 @@ assignees:
    git add .
    git commit -m "feat: add new feature"
 
-3. developにマージ
-   git checkout develop
-   git merge feature/new-feature
-   git push origin develop
+3. featureブランチをpush & PR作成
+   git push origin feature/new-feature
+   # GitHubでfeature/new-feature → develop のPRを作成
 
-4. 自動的にリリースPRが作成される
+4. PR レビュー・承認後、developにマージ
 
-5. リリースPRをレビューしてmasterにマージ
+5. 自動的にリリースPRが作成される（develop → master）
 
-6. 自動的にリリース・パッケージ公開が実行される
+6. リリースPRをレビューしてmasterにマージ
+
+7. 自動的にリリース・パッケージ公開が実行される
+```
+
+### Dependabotによる自動更新フロー
+```
+1. 毎週月曜日にDependabotが依存関係をチェック
+
+2. アップデートがあれば自動的にfeatureブランチを作成
+   例: dependabot/pub/package_name-1.2.3
+
+3. developブランチへのPRが自動作成
+
+4. 自動テスト実行
+   - コード解析
+   - フォーマットチェック
+   - 単体テスト
+
+5. patch/minor/securityアップデートは自動マージ
+   major アップデートは手動レビュー
+
+6. マージ後、featureブランチは自動削除
+
+7. 定期的（日曜日）にリリースPRが自動作成
 ```
 
 ### 緊急修正フロー
@@ -134,7 +190,7 @@ assignees:
    git add .
    git commit -m "fix: urgent security fix"
 
-3. masterに直接マージ
+3. masterに直接マージ（緊急時のみ）
    git checkout master
    git merge hotfix/urgent-fix
    git push origin master
