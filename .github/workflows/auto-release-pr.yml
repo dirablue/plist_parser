@@ -135,7 +135,7 @@ jobs:
         if: steps.check-changes.outputs.has_changes == 'true' && steps.check-pr.outputs.pr_exists == 'false'
         run: |
           NEW_VERSION="${{ steps.next-version.outputs.next_version }}"
-          sed -i "s/^version:.*/version: $NEW_VERSION/" pubspec.yaml
+          sed -i'' -e "s/^version:.*/version: $NEW_VERSION/" pubspec.yaml
           
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
