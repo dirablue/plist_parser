@@ -27,46 +27,29 @@ jobs:
           echo "PR URL: ${{ github.event.pull_request.html_url }}"
           echo "HEAD SHA: ${{ github.event.pull_request.head.sha }}"
 
-      - name: Dependabot metadata
-        id: metadata
-        uses: dependabot/fetch-metadata@v2
-        continue-on-error: true
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Check if Dependabot (alternative)
-        id: dependabot-check-alt
+      - name: Check if Dependabot
+        id: dependabot-check
         run: |
-          echo "Checking various Dependabot indicators..."
-          echo "github.actor: ${{ github.actor }}"
-          echo "github.event.pull_request.user.login: ${{ github.event.pull_request.user.login }}"
-          echo "github.event.pull_request.user.type: ${{ github.event.pull_request.user.type }}"
-          echo "github.event.pull_request.head.repo.full_name: ${{ github.event.pull_request.head.repo.full_name }}"
-          
-          # Multiple ways to detect Dependabot
-          if [[ "${{ github.actor }}" == "dependabot[bot]" ]] || \
-             [[ "${{ github.event.pull_request.user.login }}" == "dependabot[bot]" ]] || \
-             [[ "${{ github.event.pull_request.user.type }}" == "Bot" && "${{ github.event.pull_request.user.login }}" =~ dependabot ]] || \
-             [[ "${{ steps.metadata.outcome }}" == "success" ]]; then
+          if [[ "${{ github.actor }}" == "dependabot[bot]" || "${{ github.event.pull_request.user.login }}" == "dependabot[bot]" ]]; then
             echo "is_dependabot=true" >> $GITHUB_OUTPUT
             echo "✅ This is a Dependabot PR"
           else
             echo "is_dependabot=false" >> $GITHUB_OUTPUT
-            echo "❌ This is NOT a Dependabot PR"
+            echo "❌ This is NOT a Dependabot PR - skipping auto-merge"
           fi
 
       - name: Wait for tests to complete
-        if: steps.dependabot-check-alt.outputs.is_dependabot == 'true'
+        if: steps.dependabot-check.outputs.is_dependabot == 'true'
         uses: lewagon/wait-on-check-action@v1.3.4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           check-name: 'build'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 30
+          wait-interval: 10
           allowed-conclusions: success
 
       - name: Approve and merge PR
-        if: steps.dependabot-check-alt.outputs.is_dependabot == 'true'
+        if: steps.dependabot-check.outputs.is_dependabot == 'true'
         run: |
           echo "Approving PR: $PR_URL"
           gh pr review --approve "$PR_URL"
