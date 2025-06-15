@@ -22,6 +22,20 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Check if running on develop branch
+        run: |
+          CURRENT_BRANCH="${{ github.ref_name }}"
+          echo "Current branch: $CURRENT_BRANCH"
+          
+          if [ "$CURRENT_BRANCH" != "develop" ]; then
+            echo "❌ Error: This workflow can only be run on the develop branch"
+            echo "Current branch: $CURRENT_BRANCH"
+            echo "Please switch to the develop branch and try again"
+            exit 1
+          fi
+          
+          echo "✅ Running on develop branch - proceeding with release version creation"
+
       - name: Checkout develop branch
         uses: actions/checkout@v4
         with:
