@@ -17,9 +17,9 @@ updates:
       - "dependencies"
       - "auto-update"
     reviewers:
-      - "gaku"
+      - "dirablue"
     assignees:
-      - "gaku"
+      - "dirablue"
 
   # GitHub Actions dependencies
   - package-ecosystem: "github-actions"
@@ -39,6 +39,6 @@ updates:
       - "github-actions"
       - "auto-update"
     reviewers:
-      - "gaku"
+      - "dirablue"
     assignees:
-      - "gaku"
+      - "dirablue"
