@@ -34,10 +34,75 @@ jobs:
       - name: Run tests
         run: flutter test --coverage
 
+      - name: Install coverage tools
+        run: dart pub global activate coverage
+
+      - name: Generate LCOV report
+        run: dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --packages=.dart_tool/package_config.json --report-on=lib
+
+      - name: Generate HTML coverage report
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y lcov
+          genhtml coverage/lcov.info -o coverage/html --title "Plist Parser Coverage Report"
+
+      - name: Display coverage summary
+        run: |
+          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          lcov --summary coverage/lcov.info >> $GITHUB_STEP_SUMMARY 2>&1 || echo "Failed to generate summary" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 Detailed HTML report available in artifacts." >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload coverage reports as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage/lcov.info
+            coverage/html/
+          retention-days: 30
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
           flags: unittests
-          directory: ./coverage
           verbose: true
+
+      - name: Coverage comment (PR only)
+        if: github.event_name == 'pull_request'
+        uses: romeovs/lcov-reporter-action@v0.3.1
+        with:
+          lcov-file: ./coverage/lcov.info
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          title: "Coverage Report"
+
+      - name: Check coverage threshold
+        run: |
+          # Extract and display coverage information
+          echo "📊 Coverage Analysis:"
+          lcov --summary coverage/lcov.info 2>&1 || echo "Failed to generate coverage summary"
+          
+          # Extract coverage percentage from lcov summary
+          COVERAGE_PERCENTAGE=$(lcov --summary coverage/lcov.info 2>/dev/null | grep -o '[0-9]\+\.[0-9]\+%' | head -1 | sed 's/%//' || echo "0")
+          echo "Detected coverage: ${COVERAGE_PERCENTAGE}%"
+          
+          # Convert to integer for comparison (multiply by 10 to handle decimal)
+          COVERAGE_INT=$(echo "$COVERAGE_PERCENTAGE" | cut -d. -f1)
+          COVERAGE_DEC=$(echo "$COVERAGE_PERCENTAGE" | cut -d. -f2)
+          COVERAGE_TOTAL=$((COVERAGE_INT * 100 + COVERAGE_DEC))
+          
+          # Check if coverage meets our standards
+          if [ "$COVERAGE_TOTAL" -ge 10000 ]; then
+            echo "✅ Perfect coverage achieved: ${COVERAGE_PERCENTAGE}%"
+          elif [ "$COVERAGE_TOTAL" -ge 9500 ]; then
+            echo "✅ Excellent coverage: ${COVERAGE_PERCENTAGE}%"
+          elif [ "$COVERAGE_TOTAL" -ge 9000 ]; then
+            echo "✅ Good coverage: ${COVERAGE_PERCENTAGE}%"
+          else
+            echo "⚠️ Coverage could be improved: ${COVERAGE_PERCENTAGE}%"
+          fi

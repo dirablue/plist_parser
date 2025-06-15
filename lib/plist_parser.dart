@@ -107,7 +107,7 @@ class PlistParser {
     try {
       var doc = XmlDocument.parse(xml);
       elements = doc.rootElement.children.where(_isElement).cast<XmlElement>();
-    } on Error catch (e) {
+    } catch (e) {
       throw XmlParserException(e.toString());
     }
     if (elements.isEmpty) {
