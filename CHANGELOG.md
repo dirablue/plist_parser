@@ -1,3 +1,14 @@
+## 0.2.3
+
+### Bug Fixes
+- fix: create-release-version
+- fix: .dependabot-auto-merge
+- fix: .dependabot-auto-merge
+- fix: improve XML parser exception handling and achieve 100% test coverage
+- fix: create-release-version to check develop branch
+- fix: rename auto-release-version to create-release-version
+- fix: development and release workflow
+
 ## 0.2.2
 ### Other Changes
 - chore: auto-release-pr

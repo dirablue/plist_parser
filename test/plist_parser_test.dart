@@ -347,14 +347,37 @@ void main() {
           throwsA(isA<NotFoundException>()));
     });
 
+    test('XmlParserException', () {
+      // Test XmlParserException with invalid XML content
+      expect(() => PlistParser().parseXml("invalid xml content"),
+          throwsA(isA<XmlParserException>()));
+
+      // Test with incomplete XML
+      expect(() => PlistParser().parseXml("<plist><dict><key>test</key>"),
+          throwsA(isA<XmlParserException>()));
+
+      // Test with completely invalid XML
+      expect(() => PlistParser().parseXml("not xml at all"),
+          throwsA(isA<XmlParserException>()));
+
+      // Test that the exception message contains expected text
+      try {
+        PlistParser().parseXml("invalid xml");
+        fail("Expected XmlParserException to be thrown");
+      } catch (e) {
+        expect(e, isA<XmlParserException>());
+        expect(e.toString(), contains("XmlParserException"));
+      }
+    });
+
     test('parseXmlFileSync', () {
       var expected = PlistParser().parse(xml);
 
       var filePath = "${Directory.current.path}/test/test_xml.plist";
       expect(PlistParser().parseXmlFileSync(filePath), expected);
 
-      // no xml elements
-      expect(() => PlistParser().parseXmlFileSync("<div></div>"),
+      // not found file
+      expect(() => PlistParser().parseXmlFileSync("dummy/dummy.plist"),
           throwsA(isA<NotFoundException>()));
     });
 
@@ -364,7 +387,7 @@ void main() {
       var filePath = "${Directory.current.path}/test/test_xml.plist";
       expect(await PlistParser().parseXmlFile(filePath), expected);
 
-      // no xml elements
+      // not found file
       expect(() => PlistParser().parseXmlFile("dummy/dummy.plist"),
           throwsA(isA<NotFoundException>()));
     });

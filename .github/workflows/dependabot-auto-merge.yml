@@ -1,87 +1,60 @@
 name: Dependabot Auto-merge
 
 on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches: [develop]
   pull_request:
     types: [opened, synchronize, reopened]
     branches: [develop]
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: 'PR number to process (leave empty to process all open Dependabot PRs)'
-        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  actions: read
 
 jobs:
   dependabot-auto-merge:
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]' && contains(github.event.pull_request.title, 'dependencies')
-    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-
-      - name: Setup Dart
-        uses: dart-lang/setup-dart@v1
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.22.3'
-          channel: 'stable'
-
-      - name: Get dependencies
-        run: dart pub get
-
-      - name: Analyze code
-        run: dart analyze --fatal-infos --fatal-warnings
-
-      - name: Format check
-        run: dart format . --set-exit-if-changed
-
-      - name: Run tests
-        run: flutter test --coverage
-
-      - name: Check if PR is for patch/minor updates
-        id: check-update-type
+      - name: Debug info
         run: |
-          echo "Checking update type for PR #${{ github.event.number }}"
-          echo "PR Author: ${{ github.actor }}"
-          echo "Source branch: ${{ github.head_ref }}"
-          echo "Target branch: ${{ github.base_ref }}"
-          
-          # Get PR title and check if it's a patch or minor update
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          
-          if echo "$PR_TITLE" | grep -qE "(patch|minor)"; then
-            echo "auto_merge=true" >> $GITHUB_OUTPUT
-            echo "This is a patch/minor update - will auto-merge"
-          elif echo "$PR_TITLE" | grep -qE "dependencies.*security"; then
-            echo "auto_merge=true" >> $GITHUB_OUTPUT
-            echo "This is a security update - will auto-merge"
+          echo "Event: ${{ github.event_name }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "PR Author: ${{ github.event.pull_request.user.login }}"
+          echo "PR Number: ${{ github.event.pull_request.number }}"
+          echo "PR URL: ${{ github.event.pull_request.html_url }}"
+          echo "HEAD SHA: ${{ github.event.pull_request.head.sha }}"
+
+      - name: Check if Dependabot
+        id: dependabot-check
+        run: |
+          if [[ "${{ github.actor }}" == "dependabot[bot]" || "${{ github.event.pull_request.user.login }}" == "dependabot[bot]" ]]; then
+            echo "is_dependabot=true" >> $GITHUB_OUTPUT
+            echo "✅ This is a Dependabot PR"
           else
-            echo "auto_merge=false" >> $GITHUB_OUTPUT
-            echo "This is a major update or unknown type - requires manual review"
+            echo "is_dependabot=false" >> $GITHUB_OUTPUT
+            echo "❌ This is NOT a Dependabot PR - skipping auto-merge"
           fi
 
-      - name: Auto-approve PR
-        if: steps.check-update-type.outputs.auto_merge == 'true'
-        run: |
-          gh pr review ${{ github.event.number }} --approve --body "Auto-approved by Dependabot auto-merge workflow"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for tests to complete
+        if: steps.dependabot-check.outputs.is_dependabot == 'true'
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          check-name: 'build'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+          allowed-conclusions: success
 
-      - name: Enable auto-merge
-        if: steps.check-update-type.outputs.auto_merge == 'true'
+      - name: Approve and merge PR
+        if: steps.dependabot-check.outputs.is_dependabot == 'true'
         run: |
-          gh pr merge ${{ github.event.number }} --squash --auto
+          echo "Approving PR: $PR_URL"
+          gh pr review --approve "$PR_URL"
+          echo "Setting auto-merge for PR: $PR_URL"
+          gh pr merge --auto --squash "$PR_URL"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Add comment for manual review
-        if: steps.check-update-type.outputs.auto_merge == 'false'
-        run: |
-          gh pr comment ${{ github.event.number }} --body "🔍 This PR requires manual review as it may contain breaking changes. Please review and merge manually if appropriate."
-        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
