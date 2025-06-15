@@ -131,12 +131,12 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.check-tag.outputs.tag_exists == 'false'
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.get-version.outputs.tag }}
-          release_name: Release ${{ steps.get-version.outputs.tag }}
+          name: Release ${{ steps.get-version.outputs.tag }}
           body: ${{ steps.changelog.outputs.changelog }}
           draft: false
           prerelease: false
