@@ -1,3 +1,11 @@
+## 0.2.5
+
+### Changes
+- ci(deps): bump lewagon/wait-on-check-action from 1.3.4 to 1.4.0 (#29)
+- Merge pull request #30 from dirablue/copilot/fix-708a32f8-fc5e-4a7e-8ece-e61559c05091
+- Fix build workflow to skip external service steps for Dependabot PRs
+- Initial plan
+
 ## 0.2.4
 
 ### Other Changes
