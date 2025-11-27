@@ -37,7 +37,7 @@ jobs:
           echo "✅ Running on develop branch - proceeding with release version creation"
 
       - name: Checkout develop branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: develop
           fetch-depth: 0
@@ -82,7 +82,7 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Upload coverage report as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: release-coverage-report
           path: |

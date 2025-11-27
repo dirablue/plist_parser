@@ -1,3 +1,11 @@
+## 0.2.6
+
+### Changes
+- ci(deps): bump actions/checkout from 5 to 6 (#35)
+- ci(deps): bump actions/upload-artifact from 4 to 5 (#34)
+- ci(deps): bump lewagon/wait-on-check-action from 1.4.0 to 1.4.1 (#33)
+- ci(deps): bump actions/checkout from 4 to 5 (#32)
+
 ## 0.2.5
 
 ### Changes

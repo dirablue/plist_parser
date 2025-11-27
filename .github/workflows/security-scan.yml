@@ -15,7 +15,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Dart
         uses: dart-lang/setup-dart@v1
@@ -46,7 +46,7 @@ jobs:
 
       - name: Upload security scan results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: security-scan-results
           path: deps.json
