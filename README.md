@@ -14,7 +14,7 @@ This was inspired by some libraries. please see below details.
 
 ```yaml
 dependencies:
-  plist_parser: "^0.2.6"
+  plist_parser: "^0.2.7"
 ```
 
 ## 📋 Requirements
