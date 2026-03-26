@@ -1,3 +1,10 @@
+## 0.2.7
+
+### Changes
+- ci(deps): bump actions/upload-artifact from 6 to 7 (#39)
+- ci(deps): bump lewagon/wait-on-check-action from 1.4.1 to 1.5.0 (#38)
+- ci(deps): bump actions/upload-artifact from 5 to 6 (#37)
+
 ## 0.2.6
 
 ### Changes
