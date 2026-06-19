@@ -37,7 +37,7 @@ jobs:
           echo "✅ Running on develop branch - proceeding with release version creation"
 
       - name: Checkout develop branch
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: develop
           fetch-depth: 0
