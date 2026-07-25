@@ -15,14 +15,14 @@ jobs:
     
     steps:
       - name: Checkout master branch
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: master
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Dart
-        uses: dart-lang/setup-dart@v1
+        uses: dart-lang/setup-dart@v1.7.2
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -152,7 +152,7 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.check-tag.outputs.tag_exists == 'false'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

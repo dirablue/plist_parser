@@ -14,8 +14,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1.7.2
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.27.1'
@@ -67,7 +67,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: github.actor != 'dependabot[bot]'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info

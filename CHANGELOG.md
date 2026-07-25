@@ -1,3 +1,11 @@
+## 0.3.0
+
+### Bug Fixes
+- fix: update dart-lang/setup-dart to v1.7.2 for Node.js 24 support
+
+### Other Changes
+- Merge pull request #41 from dirablue/copilot/fix-node-js-20-deprecation
+
 ## 0.2.7
 
 ### Changes
